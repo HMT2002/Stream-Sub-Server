@@ -1,10 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const users = JSON.parse(fs.readFileSync('./json-resources/users.json'));
 const helperAPI = require('../modules/helperAPI');
-const driveAPI = require('../modules/driveAPI');
-const threads_test = JSON.parse(fs.readFileSync('./json-resources/threads_test.json'));
-
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
@@ -16,18 +12,7 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
 
 
-exports.CheckID = (req, res, next, value) => {
-  console.log('ID value is: ' + value);
-  const user = users.find((el) => el._id.$oid === value);
 
-  if (user === undefined || !user) {
-    return res.status(401).json({
-      status: 'failed',
-      message: 'invalid ID',
-    });
-  }
-  next();
-};
 
 exports.CheckInput = (req, res, next, value) => {
   console.log('ID value is: ' + value);

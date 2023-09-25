@@ -56,13 +56,17 @@ app.get('/*.mp4', videoController.MP4Handler);
 
 //ROUTES
 const videoRouter = require('./routes/videoRoute');
+const replicateRouter = require('./routes/replicateRoute');
+
 const testRouter = require('./routes/testRoute');
 
 //app.use('/', defaultRoute);
 
 
-app.use('/api/test', testRouter);
-app.use('/api/video', videoRouter);
+app.use('/api/v1/test', testRouter);
+app.use('/api/v1/video', videoRouter);
+app.use('/api/v1/replicate', videoRouter);
+
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));

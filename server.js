@@ -14,7 +14,7 @@ const fs=require('fs')
 
 //console.log(process.env);
 //START SERVER
-const port = process.env.PORT || 9000;
+const port = process.env.PORT || 9100;
 const server= app.listen(port, () => {
   console.log('App listening to ' + port);
 });

@@ -1,8 +1,6 @@
 const express = require('express');
 const fs=require('fs');
 const testController = require('../controllers/testController');
-const threadController = require('../controllers/threadController');
-const userController = require('../controllers/userController');
 const { upload, uploadVideo, uploadImage,uploadMultipartFile ,uploadMultipartFileChunk} = require('../modules/multerAPI.js');
 const router = express.Router();
 const tempHls = fs.readFileSync('./public/client.html', 'utf-8');
