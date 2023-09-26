@@ -64,7 +64,7 @@ const testRouter = require('./routes/testRoute');
 //app.use('/', defaultRoute);
 
 
-app.use('/api/v1/test', testRouter);
+app.use('/api/test', testRouter);
 app.use('/api/v1/video', videoRouter);
 app.use('/api/v1/replicate', videoRouter);
 

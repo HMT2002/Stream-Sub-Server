@@ -11,9 +11,6 @@ const fluentFfmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
 
-
-
-
 exports.CheckInput = (req, res, next, value) => {
   console.log('ID value is: ' + value);
   var isInvalid = false;
@@ -93,18 +90,19 @@ exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
   const file = req.file;
   console.log(file);
   const destination = req.file.destination;
-  console.log(destination)
+  console.log(destination);
   //const fileExtension = path.extname(req.file.path);
   let arrayChunkName = req.body.arraychunkname.split(',');
   console.log(arrayChunkName);
   let flag = true;
+  let filename = req.headers.filename;
+  let chunkname = req.headers.chunkname;
   arrayChunkName.forEach((chunkName) => {
-    if (!fs.existsSync(destination+chunkName)) {
+    if (!fs.existsSync(destination + chunkName)) {
       flag = false;
     }
   });
-  let filename = req.headers.filename;
-  let chunkname = req.headers.chunkname;
+
   if (flag) {
     console.log('file is completed');
     console.log(filename);
@@ -123,7 +121,6 @@ exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
     full: false,
   });
 });
-
 exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, next) => {
   console.log(req.body);
   console.log(req.headers);
@@ -136,134 +133,126 @@ exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, ne
     console.log(chunkName);
     console.log('begin append');
     console.log(destination);
-    console.log('./'+destination+chunkName)
-    const data = fs.readFileSync('./'+destination+chunkName);
-    fs.appendFileSync('./'+destination +filename+ '.' + ext, data);
+    console.log('./' + destination + chunkName);
+    const data = fs.readFileSync('./' + destination + chunkName);
+    fs.appendFileSync('./' + destination + filename + '.' + ext, data);
     console.log('complete append');
     console.log('begin delete');
-    fs.unlinkSync('./'+destination+chunkName);
+    fs.unlinkSync('./' + destination + chunkName);
     console.log('complete delete ' + chunkName);
   });
   console.log(filename);
-  req.file={
-    path:destination +filename+ '.' + ext,
+  req.file = {
+    path: destination + filename + '.' + ext,
     destination,
-    filename:filename+'.'+ext,
-
-}
-  // res.status(201).json({
-  //   status: 'success concat',
-  //   filename,
-  // });
+    filename: filename + '.' + ext,
+  };
   next();
 });
 
-exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) => {
- const file = req.file;
- const filePath = file.path;
- const destination = file.destination;
- const fileFolder = file.filename.split('.')[0];
- fs.access(destination + fileFolder, (error) => {
-   // To check if the given directory
-   // already exists or not
-   if (error) {
-     // If current directory does not exist
-     // then create it
-     fs.mkdir(destination + fileFolder, (error) => {
-       if (error) {
-         console.log(error);
-       } else {
-         console.log('New Directory created successfully !!');
-       }
-     });
-   } else {
-     console.log('Given Directory already exists !!');
-   }
- });
- console.log(file);
- console.log('Do ffmpeg shit');
-
- await fluentFfmpeg(filePath)
-   .on('end', async function () {
-     console.log('Screenshots scans taken');
-
-     await fluentFfmpeg(filePath)
-       .on(
-         'filenames',
-         catchAsync(async (filenames) => {
-           console.log('screenshots are ' + filenames.join(', '));
-         })
-       )
-       .screenshots({
-         timestamps: [helperAPI.GenerrateRandomNumberBetween(4, 9)],
-         filename: 'thumbnail_' + fileFolder + '.png',
-         folder: destination,
-         size: '900x600',
-       })
-       .on('end', async function () {
-         console.log('Thumbnail taken');
-  res.status(201).json({
-    status: 'success concat, get thumbnail',
-    file,
-  });       });
-   })
-   .output(destination + fileFolder + '/scans-%04d.png')
-   .outputOptions('-vf', 'fps=1/8')
-   .run();
-});
-
-
-exports.GetAllThreads = async (req, res) => {
-  //console.log(threads_test);
-
-  const threads = await Thread.find({});
-  console.log(threads);
-  res.status(200).json({
-    status: 'success',
-    result: threads_test.length,
-    requestTime: req.requestTime,
-    data: {
-      threads: threads,
-    },
+async function concater(arrayChunkName, destination, filename, ext) {
+  arrayChunkName.forEach((chunkName) => {
+    const data = fs.readFileSync('./' + destination + chunkName);
+    fs.appendFileSync('./' + destination + filename + '.' + ext, data);
+    fs.unlinkSync('./' + destination + chunkName);
   });
-};
 
-exports.FFmpeg = async (req, res) => {
-  //console.log(threads_test);
-
-  // const threads = await Thread.find({});
-  // console.log(threads);
-
-  res.status(200).json({
-    status: 'success',
-    requestTime: req.requestTime,
-    data: {
-      threads: 'FFmpeg data',
-    },
-  });
-};
-
-exports.CreateNewThread = catchAsync(async (req, res) => {
-  console.log('api/test/threads ');
+}
+exports.UploadNewFileLargeNew = catchAsync(async (req, res, next) => {
   console.log(req.body);
+  let arrayChunkName = req.body.arraychunkname.split(',');
+  console.log(arrayChunkName);
+  let filename = req.headers.filename;
+  let ext = req.headers.ext;
+  let destination = req.file.destination;
+  let flag = true;
+  arrayChunkName.forEach((chunkName) => {
+          console.log(destination + chunkName)
+    if (!fs.existsSync(destination + chunkName)) {
+      flag = false;
+    }
+  });
+  console.log(flag);
+  if (flag) {
+    // arrayChunkName.forEach((chunkName) => {
+    //   const data = fs.readFileSync('./' + destination + chunkName);
+    //   fs.appendFileSync('./' + destination + filename + '.' + ext, data);
+    //   fs.unlinkSync('./' + destination + chunkName);
+    // });
+        concater(arrayChunkName, destination, filename, ext);
 
-  const newThreadMongo = new Thread(req.body);
-
-  const response_data = await newThreadMongo
-    .save()
-    .then((doc) => {
-      console.log(doc);
-      return doc;
-    })
-    .catch((err) => {
-      console.log(err);
+    console.log(filename);
+    req.file = {
+      path: destination + filename + '.' + ext,
+      destination,
+      filename: filename + '.' + ext,
+    };
+    res.status(201).json({
+      message: 'success file',
     });
+    return;
+
+    next();
+  }
   res.status(201).json({
-    status: 'success create',
-    data: response_data,
+    message: 'success upload chunk',
   });
 });
 
+exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) => {
+  const file = req.file;
+  const filePath = file.path;
+  const destination = file.destination;
+  const fileFolder = file.filename.split('.')[0];
+  fs.access(destination + fileFolder, (error) => {
+    // To check if the given directory
+    // already exists or not
+    if (error) {
+      // If current directory does not exist
+      // then create it
+      fs.mkdir(destination + fileFolder, (error) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('New Directory created successfully !!');
+        }
+      });
+    } else {
+      console.log('Given Directory already exists !!');
+    }
+  });
+  console.log(file);
+  console.log('Do ffmpeg shit');
+
+  await fluentFfmpeg(filePath)
+    .on('end', async function () {
+      console.log('Screenshots scans taken');
+
+      await fluentFfmpeg(filePath)
+        .on(
+          'filenames',
+          catchAsync(async (filenames) => {
+            console.log('screenshots are ' + filenames.join(', '));
+          })
+        )
+        .screenshots({
+          timestamps: [helperAPI.GenerrateRandomNumberBetween(4, 9)],
+          filename: 'thumbnail_' + fileFolder + '.png',
+          folder: destination,
+          size: '900x600',
+        })
+        .on('end', async function () {
+          console.log('Thumbnail taken');
+          res.status(201).json({
+            status: 'success concat, get thumbnail',
+            file,
+          });
+        });
+    })
+    .output(destination + fileFolder + '/scans-%04d.png')
+    .outputOptions('-vf', 'fps=1/8')
+    .run();
+});
 exports.VideoStreamingFile = catchAsync(async (req, res, next) => {
   // Ensure there is a range given for the video
   const range = req.headers.range;
