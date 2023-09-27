@@ -50,7 +50,7 @@ app.use((req, res, next) => {
 app.get('/*.vtt', videoController.VTTHandler);
 app.get('/*.ass', videoController.ASSHandler);
 app.get('/*.srt', videoController.SRTHandler);
-app.get('/*.mp4', videoController.MP4MPDHandler);
+// app.get('/*.mp4', videoController.MP4MPDHandler);
 app.get('/*.mpd', videoController.MPDHandler);
 
 // #endregion
@@ -65,8 +65,9 @@ const testRouter = require('./routes/testRoute');
 
 
 app.use('/api/test', testRouter);
+
 app.use('/api/v1/video', videoRouter);
-app.use('/api/v1/replicate', videoRouter);
+app.use('/api/v1/replicate', replicateRouter);
 
 
 app.all('*', (req, res, next) => {

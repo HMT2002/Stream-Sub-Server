@@ -4,6 +4,8 @@ const helperAPI = require('../modules/helperAPI');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
+var FormData = require('form-data');
+var http = require('http');
 
 const { exec, execFileSync, spawn } = require('child_process');
 
@@ -156,10 +158,9 @@ async function concater(arrayChunkName, destination, filename, ext) {
     fs.appendFileSync('./' + destination + filename + '.' + ext, data);
     fs.unlinkSync('./' + destination + chunkName);
   });
-
 }
 exports.UploadNewFileLargeNew = catchAsync(async (req, res, next) => {
-  console.log(req.body);
+  console.log(req.headers);
   let arrayChunkName = req.body.arraychunkname.split(',');
   console.log(arrayChunkName);
   let filename = req.headers.filename;
@@ -167,7 +168,7 @@ exports.UploadNewFileLargeNew = catchAsync(async (req, res, next) => {
   let destination = req.file.destination;
   let flag = true;
   arrayChunkName.forEach((chunkName) => {
-          console.log(destination + chunkName)
+    console.log(destination + chunkName);
     if (!fs.existsSync(destination + chunkName)) {
       flag = false;
     }
@@ -179,7 +180,7 @@ exports.UploadNewFileLargeNew = catchAsync(async (req, res, next) => {
     //   fs.appendFileSync('./' + destination + filename + '.' + ext, data);
     //   fs.unlinkSync('./' + destination + chunkName);
     // });
-        concater(arrayChunkName, destination, filename, ext);
+    concater(arrayChunkName, destination, filename, ext);
 
     console.log(filename);
     req.file = {
@@ -415,27 +416,6 @@ exports.VideoTemplateHLSStreaming = catchAsync(async (req, res, next) => {
 });
 
 exports.VideoConverter = catchAsync(async (req, res, next) => {
-  // exec('videos/ffmpeg_batch.bat', (error, stdout, stderr) => {
-  //   if (error) {
-  //     res.status(400).json({
-  //       error: error,
-  //     });
-  //     return;
-  //   }
-  //   if (stdout) {
-  //     res.status(400).json({
-  //       info: stdout,
-  //     });
-  //     return;
-  //   }
-  //   if (stderr) {
-  //     res.status(400).json({
-  //       info: stderr,
-  //     });
-  //     return;
-  //   }
-  // });
-
   const filename = decodeURIComponent(req.params.filename);
   console.log('>>filename');
   console.log(filename);
@@ -467,76 +447,6 @@ exports.VideoConverter = catchAsync(async (req, res, next) => {
     });
     return;
   }
-
-  // create embeded subtitle to hls
-  // ưu tiên có sub ass trước
-  // if(fs.existsSync('videos/' + filename + '.ass')){
-  //   console.log('ass subtitle')
-
-  //   fluentFfmpeg('videos/' + filename + '.mp4', { timeout: 432000 })
-  //   .input('videos/' + filename + '.ass')
-  //   .inputOptions(['-itsoffset 0.85'])
-  //   .addOptions(['-c copy','-c:s webvtt', '-level 3.0', '-start_number 0', '-hls_time 10', '-hls_list_size 0', '-f hls'])
-  //   .output('videos/convert/' + filename + '.m3u8')
-  //   .on('start', function () {})
-  //   .on('end', function () {
-  //     console.log('end ffmpeg');
-  //     res.status(206).json({
-  //       message: 'sucess convert!',
-  //       path: '/videos/convert/' + filename + '.m3u8',
-  //     });
-  //   })
-  //   .on('progress', function (progress) {
-  //     console.log('Processing: ' + progress.percent + '% done');
-  //     console.log(progress);
-  //   })
-  //   .on('error', function (err, stdout, stderr) {
-  //     if (err) {
-  //       console.log(err.message);
-  //       console.log('stdout:\n' + stdout);
-  //       console.log('stderr:\n' + stderr);
-  //       res.status(400).json({
-  //         error: err,
-  //       });
-  //     }
-  //   })
-  //   .run();
-  //   return;
-  // }
-  // //các tùy chỉnh cho file sub srt
-  // if(fs.existsSync('videos/' + filename + '.srt')){
-  //   console.log('srt subtitle')
-  //   fluentFfmpeg('videos/' + filename + '.mp4', { timeout: 432000 })
-  //   .input('videos/' + filename + '.srt')
-  //   .inputOptions(['-itsoffset 0.85'])
-  //   .addOptions(['-c copy','-c:s webvtt', '-level 3.0', '-start_number 0', '-hls_time 10', '-hls_list_size 0', '-f hls'])
-  //   .output('videos/convert/' + filename + '.m3u8')
-  //   .on('start', function () {})
-  //   .on('end', function () {
-  //     console.log('end ffmpeg');
-  //     res.status(206).json({
-  //       message: 'sucess convert!',
-  //       path: '/videos/convert/' + filename + '.m3u8',
-  //     });
-  //   })
-  //   .on('progress', function (progress) {
-  //     console.log('Processing: ' + progress.percent + '% done');
-  //     console.log(progress);
-  //   })
-  //   .on('error', function (err, stdout, stderr) {
-  //     if (err) {
-  //       console.log(err.message);
-  //       console.log('stdout:\n' + stdout);
-  //       console.log('stderr:\n' + stderr);
-  //       res.status(400).json({
-  //         error: err,
-  //       });
-  //     }
-  //   })
-  //   .run();
-  //   return;
-  // }
-
   fluentFfmpeg('videos/' + filename + '.mp4', { timeout: 432000 })
     .addOptions(['-profile:v baseline', '-level 3.0', '-start_number 0', '-hls_time 6', '-hls_list_size 0', '-f hls'])
     .output('videos/convert/' + filename + '.m3u8')
@@ -614,4 +524,76 @@ exports.VideoPlayOPTIONS = catchAsync(async (req, res, next) => {
       }
     })
     .run();
+});
+
+exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
+  const filename = req.params.filename;
+  const videoPath = 'videos/' + filename;
+  const videoSize = fs.statSync(videoPath).size;
+  console.log(videoPath);
+  console.log(videoSize);
+  console.log(req.params);
+  const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
+  const start = 0;
+  const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
+  const contentLength = end - start + 1;
+  const headers = {
+    'Content-Range': `bytes ${start}-${end}/${videoSize}`,
+    'Accept-Ranges': 'bytes',
+    'Content-Length': contentLength,
+    'Content-Type': 'video/mp4',
+  };
+  // HTTP Status 206 for Partial Content
+
+  if (fs.existsSync(videoPath)) {
+    console.log('File converted!: ' + videoPath);
+    // res.setHeader(headers)
+    var form = new FormData({ maxDataSize: CHUNK_SIZE });
+    form.append('myMultilPartFileChunk', fs.createReadStream(videoPath));
+    var request = http.request({
+      method: 'POST',
+      port: 9200,
+      host: 'localhost',
+      path: '/api/test/receive/' + filename,
+      headers: {...form.getHeaders(),chunkname:"test_"},
+    });
+    console.log(form.getHeaders());
+    form.pipe(request);
+
+    res.status(200).json({
+      message: 'File found',
+      path: videoPath,
+    });
+    return;
+  } else {
+    console.log('not found video');
+    res.status(200).json({
+      message: 'File not found',
+      path: videoPath,
+    });
+    return;
+  }
+
+  res.writeHead(206, headers);
+  const videoStream = fs.createReadStream(videoPath, { start, end });
+  videoStream.pipe(res);
+});
+
+exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
+  console.log(req.headers)
+  console.log(req.file)
+  const destination=req.file.destination;
+  const filename=req.file.filename;
+  const originalname=req.file.originalname;
+  const arrayChunkName=["test_"]
+  const ext='mp4';
+  arrayChunkName.forEach((chunkName) => {
+    const data = fs.readFileSync('./' + destination+filename);
+    fs.appendFileSync('./' + destination +originalname  , data);
+    fs.unlinkSync('./' + destination + filename);
+  });
+
+  res.status(201).json({
+    message: 'still in development',
+  });
 });

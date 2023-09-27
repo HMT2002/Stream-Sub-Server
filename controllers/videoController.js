@@ -277,20 +277,7 @@ exports.MPDHandler = catchAsync(async (req, res, next) => {
   }
 });
 
-exports.FFmpeg = catchAsync(async (req, res, next) => {
-  //console.log(threads_test);
 
-  // const threads = await Thread.find({});
-  // console.log(threads);
-
-  res.status(200).json({
-    status: 'success',
-    requestTime: req.requestTime,
-    data: {
-      threads: 'FFmpeg data',
-    },
-  });
-});
 
 exports.GetVideoThumbnail = catchAsync(async (req, res, next) => {
   //console.log(req);

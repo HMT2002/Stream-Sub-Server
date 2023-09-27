@@ -37,4 +37,7 @@ router.route('/template-hls/:filename').get(testController.VideoTemplateHLSStrea
 
 
 
+  router.route('/receive/:filename').post(uploadMultipartFileChunk,testController.ReceiveFileFromOtherNode);
+  router.route('/send/:filename').get(testController.SendFileToOtherNode);
+
 module.exports = router;

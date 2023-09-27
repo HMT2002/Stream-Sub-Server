@@ -7,7 +7,7 @@ const router = express.Router();
 const tempHls = fs.readFileSync('./public/client.html', 'utf-8');
 
 //ROUTE HANDLER
-router.route('/receive/:filename').get(replicateController.ReceiveFileFromOtherNode);
-router.route('/send/:filename').get(replicateController.ReceiveFileFromOtherNode);
+router.route('/receive/:filename').post(replicateController.ReceiveFileFromOtherNode);
+router.route('/send/:filename').get(replicateController.SendFileToOtherNode);
 
 module.exports = router;

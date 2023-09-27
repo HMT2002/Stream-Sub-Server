@@ -10,7 +10,6 @@ const tempHls = fs.readFileSync('./public/client.html', 'utf-8');
 router.route('/upload-video-drive').post(uploadVideo, videoController.UploadNewFileDrive);
 router.route('/upload-video-firebase').post(uploadVideo, videoController.UploadNewFileFirebase);
 
-router.route('/ffmpeg').post(videoController.FFmpeg);
 router.route('/video-stream-file/:filename').get(videoController.VideoStreamingFile);
 router.route('/video-stream-hls/:filename').get(videoController.VideoStreamingHLS);
 router.route('/video-proc/convert-stream/:filename').get(videoController.VideoConverter);
