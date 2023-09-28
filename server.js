@@ -14,7 +14,7 @@ const fs=require('fs')
 
 //console.log(process.env);
 //START SERVER
-const port = process.env.PORT || 9100;
+const port = Number(process.env.PORT)+Number(process.env.SERVERINDEX)*Number(process.env.SERVERREP) || 9000;
 const server= app.listen(port, () => {
   console.log('App listening to ' + port);
 });
@@ -62,17 +62,19 @@ const NodeMediaServer = require('node-media-server');
 
 const config = {
   rtmp: {
-    port: Number(process.env.RTMPPORT),
+    port: Number(process.env.RTMPPORT)+Number(process.env.SERVERINDEX),
     chunk_size: 60000,
     gop_cache: true,
     ping: 30,
     ping_timeout: 60
   },
   http: {
-    port: Number(process.env.PORT)+50,
+    port: Number(process.env.PORT)+Number(process.env.SERVERINDEX)*Number(process.env.SERVERREP)+1,
     allow_origin: '*'
   }
 };
+
+
 
 var nms = new NodeMediaServer(config)
 nms.run();
