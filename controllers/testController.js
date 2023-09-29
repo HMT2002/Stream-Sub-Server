@@ -540,44 +540,42 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
   const videoPath = 'videos/' + filename;
   if (fs.existsSync(videoPath)) {
     console.log('File converted!: ' + videoPath);
-
     const videoSize = fs.statSync(videoPath).size;
-    console.log(req.params);
-
     let chunkName = helperAPI.GenerrateRandomString(7);
     let arrayChunkName = [];
     const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
-
     const totalChunks = Math.ceil(videoSize / CHUNK_SIZE);
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
       arrayChunkName.push(chunkName + '_' + chunkIndex);
     }
-
-    console.log(arrayChunkName);
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
       let start = chunkIndex * CHUNK_SIZE;
       let end = Math.min(start + CHUNK_SIZE, videoSize);
-      var form = new FormData();
       const readStream = fs.createReadStream(videoPath, { start: start, end: end - 1 });
-
+      var form = new FormData();
       form.append('myMultilPartFileChunk', readStream);
       form.append('arraychunkname', JSON.stringify(arrayChunkName));
-      var request = http.request({
+      var options = {
         method: 'POST',
         port: 9200,
         host: 'localhost',
         path: '/api/test/receive/' + filename,
-        headers: { ...form.getHeaders(), chunkname: arrayChunkName[chunkIndex] },
-      });
+        headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
+      };
+      var request = http.request(options);
       form.pipe(request);
+
+      let count=0;
+      request.on('response', function (response) {
+        response.on('data', function (chunk) {
+       });
+      });
     }
 
     res.status(200).json({
       message: 'File found',
       path: videoPath,
     });
-    console.log(form.getHeaders());
-
     return;
   } else {
     console.log('not found video');
@@ -608,24 +606,38 @@ async function SplitAndSendFile(start, end, videoPath, filename, arrayChunkName,
 }
 
 exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
-  const destination = req.file.destination;
-  const originalname = req.file.originalname;
-  const filename = req.file.filename;
-  let arrayChunkName =await JSON.parse(req.body.arraychunkname);
+  console.log(req.headers);
+  let arrayChunkName = JSON.parse(req.body.arraychunkname);
+  let destination = req.file.destination;
+  let flag = true;
   arrayChunkName.forEach((chunkName) => {
     if (!fs.existsSync(destination + chunkName)) {
-      res.status(201).json({
-        message: 'not enough',
-      });
-      return;
+      flag = false;
     }
   });
+
+  if (flag) {
+    req.body.arraychunkname = arrayChunkName;
+    next();
+  } else {
     res.status(201).json({
-      message: 'received',
+      message: 'success upload chunk, not enough for concate',
     });
+
     return;
+  }
 });
 
+exports.ConcateRequestNEXT = catchAsync(async (req, res, next) => {
+  let arrayChunkName = req.body.arraychunkname;
+  console.log(arrayChunkName);
+  const originalname = req.file.originalname;
+  const destination = 'videos/';
+  // concaterServer(arrayChunkName, destination, originalname);
+  res.status(201).json({
+    message: 'still in concat development',
+  });
+});
 exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
   const originalname = req.params.filename;
