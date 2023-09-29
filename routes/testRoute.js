@@ -39,6 +39,10 @@ router.route('/template-hls/:filename').get(testController.VideoTemplateHLSStrea
 
   router.route('/receive/:filename').post(uploadMultipartFileChunk,testController.ReceiveFileFromOtherNode,testController.ConcateRequestNEXT);
   router.route('/send/:filename').get(testController.SendFileToOtherNode);
-  router.route('/concate/:filename').get(testController.ConcateRequest);
+  router.route('/concate/:filename').post(testController.ConcateRequest);
+
+  
+  router.route('/ftp/send/:filename').get(testController.FTPSend);
+  router.route('/ftp/receive/:filename').get(testController.FTPReceive);
 
 module.exports = router;

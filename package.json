@@ -11,6 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.0.20",
+    "axios": "^1.5.1",
+    "basic-ftp": "^5.0.3",
     "bcryptjs": "^2.4.3",
     "connect": "^3.7.0",
     "cors": "^2.8.5",

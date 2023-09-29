@@ -6,7 +6,8 @@ const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
 var FormData = require('form-data');
 var http = require('http');
-
+const ftp = require('../modules/FTPAPI');
+const axios = require('axios');
 const { exec, execFileSync, spawn } = require('child_process');
 
 const fluentFfmpeg = require('fluent-ffmpeg');
@@ -563,12 +564,28 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
         headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
       };
       var request = http.request(options);
-      form.pipe(request);
-
-      let count=0;
+      await form.pipe(request);
       request.on('response', function (response) {
         response.on('data', function (chunk) {
-       });
+          const data = JSON.parse(chunk);
+          if (data.message == 'enough for concate') {
+            setTimeout(() => {
+              axios({
+                method: 'post',
+                url: 'http://localhost:9200/api/test/concate/' + filename,
+                data: {
+                  arraychunkname: arrayChunkName,
+                },
+              })
+                .then(function (response) {
+                  console.log(response.data);
+                })
+                .catch(function (error) {
+                  console.log(error);
+                });
+            }, 5000);
+          }
+        });
       });
     }
 
@@ -635,11 +652,13 @@ exports.ConcateRequestNEXT = catchAsync(async (req, res, next) => {
   const destination = 'videos/';
   // concaterServer(arrayChunkName, destination, originalname);
   res.status(201).json({
-    message: 'still in concat development',
+    message: 'enough for concate',
   });
 });
+
 exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
+  console.log(req.body.arraychunkname)
   const originalname = req.params.filename;
   let flag = true;
   const destination = 'videos/';
@@ -658,4 +677,70 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   res.status(201).json({
     message: 'still in development',
   });
+});
+
+async function example() {
+  const client = new ftp.Client();
+  client.ftp.verbose = true;
+  try {
+    await client.access({
+      host: 'localhost',
+      port: 9200,
+      user: 'very',
+      password: 'password',
+      secure: true,
+    });
+    console.log(await client.list());
+    await client.uploadFrom('README.md', 'README_FTP.md');
+    await client.downloadTo('README_COPY.md', 'README_FTP.md');
+  } catch (err) {
+    console.log(err);
+  }
+  client.close();
+}
+
+exports.FTPSend = catchAsync(async (req, res, next) => {
+  const filename = req.params.filename;
+  const videoPath = 'videos/' + filename;
+  if (!fs.existsSync(videoPath)) {
+    console.log('not found video');
+    res.status(200).json({
+      message: 'File not found',
+      path: videoPath,
+    });
+    return;
+  } else {
+    console.log('File converted!: ' + videoPath);
+    const videoSize = fs.statSync(videoPath).size;
+    let chunkName = helperAPI.GenerrateRandomString(7);
+    let arrayChunkName = [];
+    const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
+    const totalChunks = Math.ceil(videoSize / CHUNK_SIZE);
+
+    res.status(200).json({
+      message: 'File found',
+      path: videoPath,
+    });
+    return;
+  }
+});
+
+exports.FTPReceive = catchAsync(async (req, res, next) => {
+  const filename = req.params.filename;
+  const videoPath = 'videos/' + filename;
+  if (!fs.existsSync(videoPath)) {
+    console.log('not found video');
+    res.status(200).json({
+      message: 'File not found',
+      path: videoPath,
+    });
+    return;
+  } else {
+    example();
+    res.status(200).json({
+      message: 'File found',
+      path: videoPath,
+    });
+    return;
+  }
 });
