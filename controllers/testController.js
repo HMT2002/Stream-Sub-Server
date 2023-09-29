@@ -6,7 +6,6 @@ const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
 var FormData = require('form-data');
 var http = require('http');
-const ftp = require('../modules/FTPAPI');
 const axios = require('axios');
 const { exec, execFileSync, spawn } = require('child_process');
 

@@ -18,7 +18,7 @@ const port = Number(process.env.PORT)+Number(process.env.SERVERINDEX)*Number(pro
 const server= app.listen(port, () => {
   console.log('App listening to ' + port);
 });
-
+server.timeout = 15000; //15s
 
 new hls(server,{
   provider:{
