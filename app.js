@@ -36,13 +36,10 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
 });
-//http://localhost:9000/videos/convert/無意識.m3u8
 app.use((req, res, next) => {
   req.requestTime = new Date().toISOString();
   // console.log(req.requestTime);
-  //console.log(req.headers);
   req.url = decodeURIComponent(req.url);
-
   next();
 });
 
@@ -50,7 +47,7 @@ app.use((req, res, next) => {
 app.get('/*.vtt', videoController.VTTHandler);
 app.get('/*.ass', videoController.ASSHandler);
 app.get('/*.srt', videoController.SRTHandler);
-// app.get('/*.mp4', videoController.MP4MPDHandler);
+app.get('/*.mp4', videoController.MP4MPDHandler);
 app.get('/*.mpd', videoController.MPDHandler);
 
 // #endregion

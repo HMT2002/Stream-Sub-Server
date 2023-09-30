@@ -5,7 +5,6 @@ const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
 var FormData = require('form-data');
-var http = require('http');
 const axios = require('axios');
 
 async function concater(arrayChunkName, destination, filename, ext) {
@@ -25,8 +24,11 @@ async function concaterServer(arrayChunkName, destination, originalname) {
 }
 
 exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
-  const filename = req.params.filename;
+  const filename = req.body.filename||'largetest.mp4';
   const videoPath = 'videos/' + filename;
+  const url=req.body.url||'http://localhost';
+  const port=req.body.port||':9200';
+
   if (fs.existsSync(videoPath)) {
     console.log('File converted!: ' + videoPath);
     const videoSize = fs.statSync(videoPath).size;
@@ -44,25 +46,23 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
       var form = new FormData();
       form.append('myMultilPartFileChunk', readStream);
       form.append('arraychunkname', JSON.stringify(arrayChunkName));
-      var options = {
-        method: 'POST',
-        port: 9200,
-        host: 'localhost',
-        path: '/api/v1/replicate/receive/' + filename,
+      axios({
+        method: "post",
+        url: url+port+'/api/v1/replicate/receive',
+        data:form,
         headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
-      };
-      var request = http.request(options);
-      await form.pipe(request);
-      request.on('response', function (response) {
-        response.on('data', function (chunk) {
-          const data = JSON.parse(chunk);
+      })
+        .then(function (response) {
+          console.log(response.data);
+          const data = response.data;
           if (data.message == 'enough for concate') {
             setTimeout(() => {
               axios({
                 method: 'post',
-                url: 'http://localhost:9200/api/v1/replicate/concate/' + filename,
+                url: url+port+'/api/v1/replicate/concate',
                 data: {
                   arraychunkname: arrayChunkName,
+                  filename:filename
                 },
               })
                 .then(function (response) {
@@ -73,45 +73,26 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
                 });
             }, 5000);
           }
+        })
+        .catch(function (error) {
+          console.log(error);
         });
-      });
     }
-
     res.status(200).json({
       message: 'File found',
       path: videoPath,
     });
     return;
   } else {
-    console.log('not found video');
     res.status(200).json({
       message: 'File not found',
       path: videoPath,
     });
     return;
   }
-
-  // res.writeHead(206, headers);
-  // const videoStream = fs.createReadStream(videoPath, { start, end });
-  // videoStream.pipe(res);
 });
 
-async function SplitAndSendFile(start, end, videoPath, filename, arrayChunkName, chunkIndex) {
-  var form = new FormData();
-  form.append('myMultilPartFileChunk', fs.createReadStream(videoPath, { start, end }));
-  form.append('arraychunkname', JSON.stringify(arrayChunkName));
-  var request = http.request({
-    method: 'POST',
-    port: 9200,
-    host: 'localhost',
-    path: '/api/test/receive/' + filename,
-    headers: { ...form.getHeaders(), chunkname: arrayChunkName[chunkIndex] },
-  });
-  form.pipe(request);
-}
-
 exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
-  console.log(req.headers);
   let arrayChunkName = JSON.parse(req.body.arraychunkname);
   let destination = req.file.destination;
   let flag = true;
@@ -120,34 +101,24 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
       flag = false;
     }
   });
-
   if (flag) {
+    console.log('enough')
     req.body.arraychunkname = arrayChunkName;
-    next();
+    res.status(201).json({
+      message: 'enough for concate',
+    });
   } else {
+    console.log('not enough')
     res.status(201).json({
       message: 'success upload chunk, not enough for concate',
     });
-
-    return;
   }
-});
-
-exports.ConcateRequestNEXT = catchAsync(async (req, res, next) => {
-  let arrayChunkName = req.body.arraychunkname;
-  console.log(arrayChunkName);
-  const originalname = req.file.originalname;
-  const destination = 'videos/';
-  // concaterServer(arrayChunkName, destination, originalname);
-  res.status(201).json({
-    message: 'enough for concate',
-  });
 });
 
 exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
   console.log(req.body.arraychunkname)
-  const originalname = req.params.filename;
+  const originalname = req.body.filename;
   let flag = true;
   const destination = 'videos/';
   arrayChunkName.forEach((chunkName) => {
