@@ -276,7 +276,26 @@ exports.MPDHandler = catchAsync(async (req, res, next) => {
     });
   }
 });
+exports.M4SHandler = catchAsync(async (req, res, next) => {
+  console.log('m4s is here');
+  console.log(req.url);
+  console.log(__dirname);
 
+  // console.log(req);
+  if (fs.existsSync('./' + req.url)) {
+    console.log('m4s is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    res.writeHead(206);
+    stream.pipe(res);
+  } else {
+    console.log('m4s is not exist');
+    res.status(500).json({
+      status: 500,
+      message: 'M4s is not exist! ' + req.url,
+      path: req.url,
+    });
+  }
+});
 
 
 exports.GetVideoThumbnail = catchAsync(async (req, res, next) => {
