@@ -24,71 +24,70 @@ async function concaterServer(arrayChunkName, destination, originalname) {
 }
 
 exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
-  const filename = req.body.filename||'largetest.mp4';
+  const filename = req.body.filename || 'largetest.mp4';
   const videoPath = 'videos/' + filename;
-  const url=req.body.url||'http://localhost';
-  const port=req.body.port||':9200';
-  if (fs.existsSync(videoPath)) {
-    console.log('File converted!: ' + videoPath);
-    const videoSize = fs.statSync(videoPath).size;
-    let chunkName = helperAPI.GenerrateRandomString(7);
-    let arrayChunkName = [];
-    const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
-    const totalChunks = Math.ceil(videoSize / CHUNK_SIZE);
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      arrayChunkName.push(chunkName + '_' + chunkIndex);
-    }
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      let start = chunkIndex * CHUNK_SIZE;
-      let end = Math.min(start + CHUNK_SIZE, videoSize);
-      const readStream = fs.createReadStream(videoPath, { start: start, end: end - 1 });
-      var form = new FormData();
-      form.append('myMultilPartFileChunk', readStream);
-      form.append('arraychunkname', JSON.stringify(arrayChunkName));
-      axios({
-        method: "post",
-        url: url+port+'/api/v1/replicate/receive',
-        data:form,
-        headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
-      })
-        .then(function (response) {
-          console.log(response.data);
-          const data = response.data;
-          if (data.message == 'enough for concate') {
-            setTimeout(() => {
-              axios({
-                method: 'post',
-                url: url+port+'/api/v1/replicate/concate',
-                data: {
-                  arraychunkname: arrayChunkName,
-                  filename:filename
-                },
-              })
-                .then(function (response) {
-                  console.log(response.data);
-                })
-                .catch(function (error) {
-                  console.log(error);
-                });
-            }, 5000);
-          }
-        })
-        .catch(function (error) {
-          console.log(error);
-        });
-    }
-    res.status(200).json({
-      message: 'File found',
-      path: videoPath,
-    });
-    return;
-  } else {
+  const url = req.body.url || 'http://localhost';
+  const port = req.body.port || ':9200';
+  if (!fs.existsSync(videoPath)) {
     res.status(200).json({
       message: 'File not found',
       path: videoPath,
     });
     return;
   }
+  console.log('File converted!: ' + videoPath);
+  const videoSize = fs.statSync(videoPath).size;
+  let chunkName = helperAPI.GenerrateRandomString(7);
+  let arrayChunkName = [];
+  const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
+  const totalChunks = Math.ceil(videoSize / CHUNK_SIZE);
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    arrayChunkName.push(chunkName + '_' + chunkIndex);
+  }
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    let start = chunkIndex * CHUNK_SIZE;
+    let end = Math.min(start + CHUNK_SIZE, videoSize);
+    const readStream = fs.createReadStream(videoPath, { start: start, end: end - 1 });
+    var form = new FormData();
+    form.append('myMultilPartFileChunk', readStream);
+    form.append('arraychunkname', JSON.stringify(arrayChunkName));
+    axios({
+      method: 'post',
+      url: url + port + '/api/v1/replicate/receive',
+      data: form,
+      headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
+    })
+      .then(function (response) {
+        console.log(response.data);
+        const data = response.data;
+        if (data.message == 'enough for concate') {
+          setTimeout(() => {
+            axios({
+              method: 'post',
+              url: url + port + '/api/v1/replicate/concate',
+              data: {
+                arraychunkname: arrayChunkName,
+                filename: filename,
+              },
+            })
+              .then(function (response) {
+                console.log(response.data);
+              })
+              .catch(function (error) {
+                console.log(error);
+              });
+          }, 5000);
+        }
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
+  }
+  res.status(200).json({
+    message: 'File found',
+    path: videoPath,
+  });
+  return;
 });
 
 exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
@@ -101,13 +100,13 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
     }
   });
   if (flag) {
-    console.log('enough')
+    console.log('enough');
     req.body.arraychunkname = arrayChunkName;
     res.status(201).json({
       message: 'enough for concate',
     });
   } else {
-    console.log('not enough')
+    console.log('not enough');
     res.status(201).json({
       message: 'success upload chunk, not enough for concate',
     });
@@ -116,7 +115,92 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
 
 exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
-  console.log(req.body.arraychunkname)
+  console.log(req.body.arraychunkname);
+  const originalname = req.body.filename;
+  let flag = true;
+  const destination = 'videos/';
+  arrayChunkName.forEach((chunkName) => {
+    if (!fs.existsSync(destination + chunkName)) {
+      flag = false;
+    }
+  });
+  if (flag) {
+    concaterServer(arrayChunkName, destination, originalname);
+    res.status(201).json({
+      message: 'concated',
+    });
+    return;
+  }
+  res.status(201).json({
+    message: 'still in development',
+  });
+});
+
+exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
+  console.log('replicate folder controller')
+  const filename = req.body.filename || 'World Domination How-ToHls';
+  const videoPath = 'videos/' + filename + '/';
+  const url = req.body.url || 'http://localhost';
+  const port = req.body.port || ':9200';
+
+  const baseUrl = url + port + '/api/v1/check/folder/' + filename;
+  console.log(baseUrl)
+  const {data:check} = await axios.get(baseUrl);
+  console.log(check);
+  if(check.existed===true){
+      res.status(200).json({
+    message: 'Folder already existed on sub server',
+    check,
+  });
+  return;
+  }
+
+  
+    if (!fs.existsSync(videoPath)) {
+    res.status(200).json({
+      message: 'File not found',
+      path: videoPath,
+    });
+    return;
+  }
+  console.log('File found!: ' + videoPath);
+  const dir = 'videos/' + filename ;
+  console.log(dir);
+  const fileList = fs.readdirSync(dir);
+  console.log(fileList);
+  for (let i = 0; i < fileList.length; i++) {
+    const filePath=videoPath + '/' + fileList[i]
+    console.log(filePath)
+    console.log(fs.existsSync(filePath))
+    const readStream = fs.createReadStream(filePath);
+    var form = new FormData();
+    form.append('myFolderFile', readStream);
+    const { data } = await axios({
+      method: 'post',
+      url: url + port + '/api/v1/replicate/receive-folder',
+      data: form,
+      headers: { ...form.getHeaders(), filename: fileList[i],folder:filename },
+    });
+    console.log(data);
+  }
+  res.status(200).json({
+    message: 'Folder sent!',
+    videoPath,
+  });
+  return;
+});
+
+exports.ReceiveFolderFileFromOtherNode = catchAsync(async (req, res, next) => {
+  let destination = req.file.destination;
+  let flag = true;
+  res.status(200).json({
+    message: 'success receive folder files',
+  });
+});
+
+exports.ConcateFolderRequest = catchAsync(async (req, res, next) => {
+  let arrayChunkName = req.body.arraychunkname;
+  console.log(req.body.arraychunkname);
   const originalname = req.body.filename;
   let flag = true;
   const destination = 'videos/';

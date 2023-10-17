@@ -1,12 +1,14 @@
 const express = require('express');
 const defaultController = require('../controllers/defaultController');
-const authController = require('../controllers/authController');
 
 const router = express.Router();
 
 //ROUTE HANDLER
-router.route('/').get(defaultController.Default);
-router.route('/forget-password').post(authController.ForgetPassword);
-router.route('/reset-password/:token').patch(authController.ResetPassword);
+
+router.route('/check/hls/:filename').get(defaultController.CheckHlsFile);
+router.route('/check/dash/:filename').get(defaultController.CheckDashFile);
+
+// router.route('/check/hls/:filename').post(defaultController.CheckHlsFile);
+// router.route('/check/dash/:filename').post(defaultController.CheckDashFile);
 
 module.exports = router;

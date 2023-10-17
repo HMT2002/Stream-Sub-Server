@@ -6,5 +6,7 @@ const router = express.Router();
 
 //ROUTE HANDLER
 router.route('/').post(deleteController.ReceiveDeleteRequest);
+router.route('/folder').post(deleteController.ReceiveDeleteFolderRequest);
+
 
 module.exports = router;

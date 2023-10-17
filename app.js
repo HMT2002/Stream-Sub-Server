@@ -54,19 +54,24 @@ app.get('/*.m4s', videoController.M4SHandler);
 // #endregion
 
 //ROUTES
-const videoRouter = require('./routes/videoRoute');
-const replicateRouter = require('./routes/replicateRoute');
-const deleteRouter = require('./routes/deleteRoute');
+const videoRoute = require('./routes/videoRoute');
+const replicateRoute = require('./routes/replicateRoute');
+const deleteRoute = require('./routes/deleteRoute');
+const checkRoute = require('./routes/checkRoute');
 
-const testRouter = require('./routes/testRoute');
+const testRoute = require('./routes/testRoute');
+const defaultRouter = require('./routes/defaultRoute');
 
 //app.use('/', defaultRoute);
 
 
-app.use('/api/test', testRouter);
-app.use('/api/v1/video', videoRouter);
-app.use('/api/v1/replicate', replicateRouter);
-app.use('/api/v1/delete', deleteRouter);
+app.use('/api/test', testRoute);
+app.use('/api/default', defaultRouter);
+
+app.use('/api/v1/video', videoRoute);
+app.use('/api/v1/replicate', replicateRoute);
+app.use('/api/v1/delete', deleteRoute);
+app.use('/api/v1/check', checkRoute);
 
 
 
