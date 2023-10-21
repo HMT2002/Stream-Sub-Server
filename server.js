@@ -6,6 +6,7 @@ dotenv.config({ path: './config.env' });
 const app = require('./app');
 
 const dbVideoSharing = require('./config/database/db_index');
+var httpAttach = require('http-attach') // useful module for attaching middlewares
 
 dbVideoSharing.connect();
 
@@ -14,7 +15,7 @@ const fs=require('fs')
 
 //console.log(process.env);
 //START SERVER
-const port = Number(process.env.PORT)+Number(process.env.SERVERINDEX)*Number(process.env.SERVERREP) || 9000;
+const port = Number(process.env.PORT)+Number(process.env.SERVERINDEX)*Number(process.env.SERVERREP) || 9100;
 const server= app.listen(port, () => {
   console.log('App listening to ' + port);
 });
@@ -25,15 +26,11 @@ new hls(server,{
     exists:(req,cb)=>{
       req.url=decodeURIComponent(req.url);
       console.log('server js exists'+ req.url)
-      // req.url=decodeURIComponent(req.url);
+      req.url=decodeURIComponent(req.url);
       const ext=req.url.split('.')[1];
-      const urlAndFilename=req.url.split('.')[0];
       if(ext!=='m3u8'&&ext!=='ts'){
-        //console.log('not manifest or segment file');
         return cb(null,true);
       }
-      console.log(urlAndFilename);
-
       fs.access(__dirname+req.url,fs.constants.F_OK,function(err){
         if(err){
           console.log(__dirname+req.url);
@@ -57,6 +54,8 @@ new hls(server,{
     },
   }
 })
+
+
 
 const NodeMediaServer = require('node-media-server');
 

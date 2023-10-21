@@ -297,6 +297,48 @@ exports.M4SHandler = catchAsync(async (req, res, next) => {
   }
 });
 
+exports.M3u8Handler = catchAsync(async (req, res, next) => {
+  console.log('m3u8 is here');
+  console.log(req.url);
+  console.log(__dirname);
+
+  // console.log(req);
+  if (fs.existsSync('./' + req.url)) {
+    console.log('m3u8 is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    res.writeHead(206);
+    stream.pipe(res);
+  } else {
+    console.log('m3u8 is not exist');
+    res.status(500).json({
+      status: 500,
+      message: 'M3u8 is not exist! ' + req.url,
+      path: req.url,
+    });
+  }
+});
+
+exports.TsHandler = catchAsync(async (req, res, next) => {
+  console.log('ts is here');
+  console.log(req.url);
+  console.log(__dirname);
+
+  // console.log(req);
+  if (fs.existsSync('./' + req.url)) {
+    console.log('rs is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    res.writeHead(206);
+    stream.pipe(res);
+  } else {
+    console.log('rs is not exist');
+    res.status(500).json({
+      status: 500,
+      message: 'Ts is not exist! ' + req.url,
+      path: req.url,
+    });
+  }
+});
+
 
 exports.GetVideoThumbnail = catchAsync(async (req, res, next) => {
   //console.log(req);
@@ -758,6 +800,304 @@ exports.VideoPlayOPTIONS = catchAsync(async (req, res, next) => {
           error: err,
         });
       }
+    })
+    .run();
+});
+
+
+exports.UploadNewFile = async (req, res) => {
+  //console.log(req);
+  const file = req.file;
+
+  // console.log(file);
+  const fileID = helperAPI.GenerrateRandomString(15);
+
+  const fileExtension = path.extname(file.path);
+  // console.log(fileExtension);
+
+  const driveFileName = fileID + fileExtension;
+  // console.log(driveFileName);
+
+  const GoogleDriveAPIFolerID = '1vb2ZGYvrqsz7Rrw3WErV91YxxpeL3Sxh';
+
+  const videoMetaData = {
+    name: driveFileName,
+    parents: [GoogleDriveAPIFolerID],
+  };
+  const videoMedia = {
+    mimeType: file.mimetype,
+    body: fs.createReadStream(file.path),
+  };
+
+  const driveAPIResponse = await driveAPI(videoMetaData, videoMedia);
+
+  const driveID = driveAPIResponse.data.id;
+  fs.unlink(file.path, function (err) {
+    if (err) throw err;
+    console.log('File deleted!');
+  });
+
+  console.log(driveID);
+  res.status(201).json({
+    status: 'success upload',
+    driveID: driveID,
+  });
+};
+
+exports.UploadNewFileLarge = async (req, res) => {
+  //console.log(req);
+  const file = req.file;
+  console.log(file);
+  const fileExtension = path.extname(file.path);
+  console.log(fileExtension);
+  const videoMedia = {
+    mimeType: file.mimetype,
+    body: fs.createReadStream(file.path),
+  };
+  console.log(videoMedia);
+  res.status(201).json({
+    status: 'success upload',
+    videoMedia,
+  });
+};
+
+exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
+  console.log('use '+req.method+' UploadNewFileLargeMultilpart')
+  console.log('Dealing with request');
+  //console.log(req.headers);
+  const file = req.file;
+  console.log(file);
+  const destination = req.file.destination;
+  console.log(destination);
+  //const fileExtension = path.extname(req.file.path);
+  let arrayChunkName = req.body.arraychunkname.split(',');
+  console.log(arrayChunkName);
+  let flag = true;
+  arrayChunkName.forEach((chunkName) => {
+    if (!fs.existsSync(destination + chunkName)) {
+      flag = false;
+    }
+  });
+  let filename = req.body.filename;
+  let chunkname = req.body.chunkname;
+  if (flag) {
+    console.log('file is completed');
+    console.log(filename);
+    res.status(201).json({
+      message: 'success full upload',
+      filename,
+      destination,
+      full: true,
+    });
+    return;
+  }
+  res.status(201).json({
+    message: 'success upload chunk',
+    chunkname,
+    destination,
+    full: false,
+  });
+});
+
+exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, next) => {
+  console.log(req.body);
+  console.log(req.headers);
+  let arrayChunkName = req.body.arraychunkname;
+  let filename = req.body.filename;
+  let ext = req.body.ext;
+  let destination = req.body.destination;
+  console.log('file is completed, begin concat');
+  arrayChunkName.forEach((chunkName) => {
+    console.log(chunkName);
+    console.log('begin append');
+    console.log(destination);
+    console.log('./' + destination + chunkName);
+    const data = fs.readFileSync('./' + destination + chunkName);
+    fs.appendFileSync('./' + destination + filename + '.' + ext, data);
+    console.log('complete append');
+    console.log('begin delete');
+    fs.unlinkSync('./' + destination + chunkName);
+    console.log('complete delete ' + chunkName);
+  });
+  console.log(filename);
+  req.file = {
+    path: destination + filename + '.' + ext,
+    destination,
+    filename: filename + '.' + ext,
+  };
+  // res.status(201).json({
+  //   status: 'success concat',
+  //   filename,
+  // });
+  next();
+});
+
+
+exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) => {
+  const file = req.file;
+  const filePath = file.path;
+  const destination = file.destination;
+  const fileFolder = file.filename.split('.')[0];
+  fs.access(destination + fileFolder, (error) => {
+    // To check if the given directory
+    // already exists or not
+    if (error) {
+      // If current directory does not exist
+      // then create it
+      fs.mkdir(destination + fileFolder, (error) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('New Directory created successfully !!');
+        }
+      });
+    } else {
+      console.log('Given Directory already exists !!');
+    }
+  });
+  console.log(file);
+  console.log('Do ffmpeg shit');
+
+  await fluentFfmpeg(filePath)
+    .on('end', async function () {
+      console.log('Screenshots scans taken');
+
+      await fluentFfmpeg(filePath)
+        .on(
+          'filenames',
+          catchAsync(async (filenames) => {
+            console.log('screenshots are ' + filenames.join(', '));
+          })
+        )
+        .screenshots({
+          timestamps: [helperAPI.GenerrateRandomNumberBetween(4, 9)],
+          filename: 'thumbnail_' + fileFolder + '.png',
+          folder: destination,
+          size: '900x600',
+        })
+        .on('end', async function () {
+          console.log('Thumbnail taken');
+          res.status(201).json({
+            status: 'success concat, get thumbnail',
+            file,
+          });
+        });
+    })
+    .output(destination + fileFolder + '/scans-%04d.png')
+    .outputOptions('-vf', 'fps=1/8')
+    .run();
+});
+
+exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
+  const file = req.file;
+  const filePath = file.path;
+  const destination = file.destination;
+  const filenameWithoutExt = file.filename.split('.')[0];
+  const outputFolder = destination + filenameWithoutExt + 'Hls';
+  const outputResult=outputFolder+'/'+filenameWithoutExt+'.m3u8';
+  fs.access(outputFolder, (error) => {
+    // To check if the given directory
+    // already exists or not
+    if (error) {
+      // If current directory does not exist
+      // then create it
+      fs.mkdir(outputFolder, (error) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('New Directory created successfully !!');
+        }
+      });
+    } else {
+      console.log('Given Directory already exists !!');
+    }
+  });
+  console.log(file);
+  console.log('Do ffmpeg shit');
+
+  // await fluentFfmpeg(filePath)
+  //   .on('end', async function () {
+  //     console.log('Hls Converted');
+
+  //     await fluentFfmpeg(filePath)
+  //       .on(
+  //         'filenames',
+  //         catchAsync(async (filenames) => {
+  //           console.log('Hls are ' + filenames.join(', '));
+  //         })
+  //       )
+  //       .on('end', async function () {
+  //         console.log('Hls Converted');
+  //  res.status(201).json({
+  //    status: 'success concat, convert to Hls',
+  //    file,
+  //  });       });
+  //   })
+  //   .output(outputFolder + '/scans-%04d.png')
+  //   .outputOptions('-vf', 'fps=1/8')
+  //   .run();
+
+  await new ffmpeg()
+    .addInput(filePath)
+    .outputOptions([
+      // '-map 0:v',
+      // '-map 0:v',
+      // '-map 0:a',
+      // '-map 0:a',
+      // '-s:v:0 426x240',
+      // '-c:v:0 libx264',
+      // '-b:v:0 400k',
+      // '-c:a:0 aac',
+      // '-b:a:0 64k',
+      // '-s:v:1 640x360',
+      // '-c:v:1 libx264',
+      // '-b:v:1 700k',
+      // '-c:a:1 aac',
+      // '-b:a:1 96k',
+      // //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      // '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      // '-f hls',
+      // '-max_muxing_queue_size 1024',
+      // '-hls_time 4',
+      // '-hls_playlist_type vod',
+      // '-hls_list_size 0',
+      // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+
+
+      '-c:v copy',
+      '-c:a copy',
+      //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      '-level 3.0',
+      '-start_number 0',
+      '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      '-f hls',
+      '-hls_list_size 0',
+      '-hls_time 10',
+      '-hls_playlist_type vod',
+      // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+    ])
+    .output(outputResult)
+    .on('start', function (commandLine) {
+      console.log('Spawned Ffmpeg with command: ' + commandLine);
+    })
+    .on('error', function (err, stdout, stderr) {
+      console.error('An error occurred: ' + err.message, err, stderr);
+    })
+    .on('progress', function (progress) {
+      console.log('Processing: ' + progress.percent + '% done');
+      console.log(progress);
+      /*percent = progress.percent;
+      res.write('<h1>' + percent + '</h1>');*/
+    })
+    .on('end', function (err, stdout, stderr) {
+      console.log('Finished processing!' /*, err, stdout, stderr*/);
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });      res.status(201).json({
+        status: 'success concat, convert to Hls',
+        path:outputResult,
+      });
     })
     .run();
 });

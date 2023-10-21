@@ -1,17 +1,18 @@
 const fs = require('fs');
 const path = require('path');
-const helperAPI = require('../modules/helperAPI');
+
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
-var FormData = require('form-data');
-var http = require('http');
-const axios = require('axios');
+
 const { exec, execFileSync, spawn } = require('child_process');
 
 const fluentFfmpeg = require('fluent-ffmpeg');
+const ffmpeg = require('fluent-ffmpeg');
+
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
+
 
 exports.CheckInput = (req, res, next, value) => {
   console.log('ID value is: ' + value);
@@ -29,6 +30,7 @@ exports.CheckInput = (req, res, next, value) => {
   }
   next();
 };
+
 
 exports.UploadNewFile = async (req, res) => {
   //console.log(req);
@@ -86,6 +88,7 @@ exports.UploadNewFileLarge = async (req, res) => {
   });
 };
 
+
 exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
   console.log('Dealing with request');
   //console.log(req.headers);
@@ -97,14 +100,13 @@ exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname.split(',');
   console.log(arrayChunkName);
   let flag = true;
-  let filename = req.headers.filename;
-  let chunkname = req.headers.chunkname;
   arrayChunkName.forEach((chunkName) => {
     if (!fs.existsSync(destination + chunkName)) {
       flag = false;
     }
   });
-
+  let filename = req.headers.filename;
+  let chunkname = req.headers.chunkname;
   if (flag) {
     console.log('file is completed');
     console.log(filename);
@@ -123,6 +125,7 @@ exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
     full: false,
   });
 });
+
 exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, next) => {
   console.log(req.body);
   console.log(req.headers);
@@ -149,64 +152,11 @@ exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, ne
     destination,
     filename: filename + '.' + ext,
   };
+  // res.status(201).json({
+  //   status: 'success concat',
+  //   filename,
+  // });
   next();
-});
-
-async function concater(arrayChunkName, destination, filename, ext) {
-  arrayChunkName.forEach((chunkName) => {
-    const data = fs.readFileSync('./' + destination + chunkName);
-    fs.appendFileSync('./' + destination + filename + '.' + ext, data);
-    //fs.unlinkSync('./' + destination + chunkName);
-  });
-}
-
-async function concaterServer(arrayChunkName, destination, originalname) {
-  arrayChunkName.forEach((chunkName) => {
-    const data = fs.readFileSync('./' + destination + chunkName);
-    fs.appendFileSync('./' + destination + originalname, data);
-    fs.unlinkSync('./' + destination + chunkName);
-  });
-}
-
-exports.UploadNewFileLargeNew = catchAsync(async (req, res, next) => {
-  console.log(req.headers);
-  let arrayChunkName = req.body.arraychunkname.split(',');
-  console.log(arrayChunkName);
-  let filename = req.headers.filename;
-  let ext = req.headers.ext;
-  let destination = req.file.destination;
-  let flag = true;
-  arrayChunkName.forEach((chunkName) => {
-    console.log(destination + chunkName);
-    if (!fs.existsSync(destination + chunkName)) {
-      flag = false;
-    }
-  });
-  console.log(flag);
-  if (flag) {
-    // arrayChunkName.forEach((chunkName) => {
-    //   const data = fs.readFileSync('./' + destination + chunkName);
-    //   fs.appendFileSync('./' + destination + filename + '.' + ext, data);
-    //   fs.unlinkSync('./' + destination + chunkName);
-    // });
-    concater(arrayChunkName, destination, filename, ext);
-
-    console.log(filename);
-    req.file = {
-      path: destination + filename + '.' + ext,
-      destination,
-      filename: filename + '.' + ext,
-    };
-    res.status(201).json({
-      message: 'success file',
-    });
-    return;
-
-    next();
-  }
-  res.status(201).json({
-    message: 'success upload chunk',
-  });
 });
 
 exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) => {
@@ -263,6 +213,136 @@ exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) 
     .outputOptions('-vf', 'fps=1/8')
     .run();
 });
+
+exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
+  const file = req.file;
+  const filePath = file.path;
+  const destination = file.destination;
+  const filenameWithoutExt = file.filename.split('.')[0];
+  const outputFolder = destination + filenameWithoutExt + 'Hls';
+  const outputResult=outputFolder+'/'+filenameWithoutExt+'.m3u8';
+  fs.access(outputFolder, (error) => {
+    // To check if the given directory
+    // already exists or not
+    if (error) {
+      // If current directory does not exist
+      // then create it
+      fs.mkdir(outputFolder, (error) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('New Directory created successfully !!');
+        }
+      });
+    } else {
+      console.log('Given Directory already exists !!');
+    }
+  });
+  console.log(file);
+  console.log('Do ffmpeg shit');
+
+  // await fluentFfmpeg(filePath)
+  //   .on('end', async function () {
+  //     console.log('Hls Converted');
+
+  //     await fluentFfmpeg(filePath)
+  //       .on(
+  //         'filenames',
+  //         catchAsync(async (filenames) => {
+  //           console.log('Hls are ' + filenames.join(', '));
+  //         })
+  //       )
+  //       .on('end', async function () {
+  //         console.log('Hls Converted');
+  //  res.status(201).json({
+  //    status: 'success concat, convert to Hls',
+  //    file,
+  //  });       });
+  //   })
+  //   .output(outputFolder + '/scans-%04d.png')
+  //   .outputOptions('-vf', 'fps=1/8')
+  //   .run();
+
+  await new ffmpeg()
+    .addInput(filePath)
+    .outputOptions([
+      // '-map 0:v',
+      // '-map 0:v',
+      // '-map 0:a',
+      // '-map 0:a',
+      // '-s:v:0 426x240',
+      // '-c:v:0 libx264',
+      // '-b:v:0 400k',
+      // '-c:a:0 aac',
+      // '-b:a:0 64k',
+      // '-s:v:1 640x360',
+      // '-c:v:1 libx264',
+      // '-b:v:1 700k',
+      // '-c:a:1 aac',
+      // '-b:a:1 96k',
+      // //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      // '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      // '-f hls',
+      // '-max_muxing_queue_size 1024',
+      // '-hls_time 4',
+      // '-hls_playlist_type vod',
+      // '-hls_list_size 0',
+      // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+
+
+      '-c:v copy',
+      '-c:a copy',
+      //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      '-level 3.0',
+      '-start_number 0',
+      '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      '-f hls',
+      '-hls_list_size 0',
+      '-hls_time 10',
+      '-hls_playlist_type vod',
+      // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+    ])
+    .output(outputResult)
+    .on('start', function (commandLine) {
+      console.log('Spawned Ffmpeg with command: ' + commandLine);
+    })
+    .on('error', function (err, stdout, stderr) {
+      console.error('An error occurred: ' + err.message, err, stderr);
+    })
+    .on('progress', function (progress) {
+      console.log('Processing: ' + progress.percent + '% done');
+      console.log(progress);
+      /*percent = progress.percent;
+      res.write('<h1>' + percent + '</h1>');*/
+    })
+    .on('end', function (err, stdout, stderr) {
+      console.log('Finished processing!' /*, err, stdout, stderr*/);
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });      res.status(201).json({
+        status: 'success concat, convert to Hls',
+        path:outputResult,
+      });
+    })
+    .run();
+});
+
+exports.FFmpeg = async (req, res) => {
+  //console.log(threads_test);
+
+  // const threads = await Thread.find({});
+  // console.log(threads);
+
+  res.status(200).json({
+    status: 'success',
+    requestTime: req.requestTime,
+    data: {
+      threads: 'FFmpeg data',
+    },
+  });
+};
+
 exports.VideoStreamingFile = catchAsync(async (req, res, next) => {
   // Ensure there is a range given for the video
   const range = req.headers.range;
@@ -425,6 +505,27 @@ exports.VideoTemplateHLSStreaming = catchAsync(async (req, res, next) => {
 });
 
 exports.VideoConverter = catchAsync(async (req, res, next) => {
+  // exec('videos/ffmpeg_batch.bat', (error, stdout, stderr) => {
+  //   if (error) {
+  //     res.status(400).json({
+  //       error: error,
+  //     });
+  //     return;
+  //   }
+  //   if (stdout) {
+  //     res.status(400).json({
+  //       info: stdout,
+  //     });
+  //     return;
+  //   }
+  //   if (stderr) {
+  //     res.status(400).json({
+  //       info: stderr,
+  //     });
+  //     return;
+  //   }
+  // });
+
   const filename = decodeURIComponent(req.params.filename);
   console.log('>>filename');
   console.log(filename);
@@ -456,6 +557,76 @@ exports.VideoConverter = catchAsync(async (req, res, next) => {
     });
     return;
   }
+
+  // create embeded subtitle to hls
+  // ưu tiên có sub ass trước
+  // if(fs.existsSync('videos/' + filename + '.ass')){
+  //   console.log('ass subtitle')
+
+  //   fluentFfmpeg('videos/' + filename + '.mp4', { timeout: 432000 })
+  //   .input('videos/' + filename + '.ass')
+  //   .inputOptions(['-itsoffset 0.85'])
+  //   .addOptions(['-c copy','-c:s webvtt', '-level 3.0', '-start_number 0', '-hls_time 10', '-hls_list_size 0', '-f hls'])
+  //   .output('videos/convert/' + filename + '.m3u8')
+  //   .on('start', function () {})
+  //   .on('end', function () {
+  //     console.log('end ffmpeg');
+  //     res.status(206).json({
+  //       message: 'sucess convert!',
+  //       path: '/videos/convert/' + filename + '.m3u8',
+  //     });
+  //   })
+  //   .on('progress', function (progress) {
+  //     console.log('Processing: ' + progress.percent + '% done');
+  //     console.log(progress);
+  //   })
+  //   .on('error', function (err, stdout, stderr) {
+  //     if (err) {
+  //       console.log(err.message);
+  //       console.log('stdout:\n' + stdout);
+  //       console.log('stderr:\n' + stderr);
+  //       res.status(400).json({
+  //         error: err,
+  //       });
+  //     }
+  //   })
+  //   .run();
+  //   return;
+  // }
+  // //các tùy chỉnh cho file sub srt
+  // if(fs.existsSync('videos/' + filename + '.srt')){
+  //   console.log('srt subtitle')
+  //   fluentFfmpeg('videos/' + filename + '.mp4', { timeout: 432000 })
+  //   .input('videos/' + filename + '.srt')
+  //   .inputOptions(['-itsoffset 0.85'])
+  //   .addOptions(['-c copy','-c:s webvtt', '-level 3.0', '-start_number 0', '-hls_time 10', '-hls_list_size 0', '-f hls'])
+  //   .output('videos/convert/' + filename + '.m3u8')
+  //   .on('start', function () {})
+  //   .on('end', function () {
+  //     console.log('end ffmpeg');
+  //     res.status(206).json({
+  //       message: 'sucess convert!',
+  //       path: '/videos/convert/' + filename + '.m3u8',
+  //     });
+  //   })
+  //   .on('progress', function (progress) {
+  //     console.log('Processing: ' + progress.percent + '% done');
+  //     console.log(progress);
+  //   })
+  //   .on('error', function (err, stdout, stderr) {
+  //     if (err) {
+  //       console.log(err.message);
+  //       console.log('stdout:\n' + stdout);
+  //       console.log('stderr:\n' + stderr);
+  //       res.status(400).json({
+  //         error: err,
+  //       });
+  //     }
+  //   })
+  //   .run();
+  //   return;
+  // }
+
   fluentFfmpeg('videos/' + filename + '.mp4', { timeout: 432000 })
     .addOptions(['-profile:v baseline', '-level 3.0', '-start_number 0', '-hls_time 6', '-hls_list_size 0', '-f hls'])
     .output('videos/convert/' + filename + '.m3u8')
@@ -533,213 +704,4 @@ exports.VideoPlayOPTIONS = catchAsync(async (req, res, next) => {
       }
     })
     .run();
-});
-
-exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
-  const filename = req.params.filename;
-  const videoPath = 'videos/' + filename;
-  if (fs.existsSync(videoPath)) {
-    console.log('File converted!: ' + videoPath);
-    const videoSize = fs.statSync(videoPath).size;
-    let chunkName = helperAPI.GenerrateRandomString(7);
-    let arrayChunkName = [];
-    const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
-    const totalChunks = Math.ceil(videoSize / CHUNK_SIZE);
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      arrayChunkName.push(chunkName + '_' + chunkIndex);
-    }
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      let start = chunkIndex * CHUNK_SIZE;
-      let end = Math.min(start + CHUNK_SIZE, videoSize);
-      const readStream = fs.createReadStream(videoPath, { start: start, end: end - 1 });
-      var form = new FormData();
-      form.append('myMultilPartFileChunk', readStream);
-      form.append('arraychunkname', JSON.stringify(arrayChunkName));
-      var options = {
-        method: 'POST',
-        port: 9200,
-        host: 'localhost',
-        path: '/api/test/receive/' + filename,
-        headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
-      };
-      var request = http.request(options);
-      await form.pipe(request);
-      request.on('response', function (response) {
-        response.on('data', function (chunk) {
-          const data = JSON.parse(chunk);
-          if (data.message == 'enough for concate') {
-            setTimeout(() => {
-              axios({
-                method: 'post',
-                url: 'http://localhost:9200/api/test/concate/' + filename,
-                data: {
-                  arraychunkname: arrayChunkName,
-                },
-              })
-                .then(function (response) {
-                  console.log(response.data);
-                })
-                .catch(function (error) {
-                  console.log(error);
-                });
-            }, 5000);
-          }
-        });
-      });
-    }
-
-    res.status(200).json({
-      message: 'File found',
-      path: videoPath,
-    });
-    return;
-  } else {
-    console.log('not found video');
-    res.status(200).json({
-      message: 'File not found',
-      path: videoPath,
-    });
-    return;
-  }
-
-  // res.writeHead(206, headers);
-  // const videoStream = fs.createReadStream(videoPath, { start, end });
-  // videoStream.pipe(res);
-});
-
-async function SplitAndSendFile(start, end, videoPath, filename, arrayChunkName, chunkIndex) {
-  var form = new FormData();
-  form.append('myMultilPartFileChunk', fs.createReadStream(videoPath, { start, end }));
-  form.append('arraychunkname', JSON.stringify(arrayChunkName));
-  var request = http.request({
-    method: 'POST',
-    port: 9200,
-    host: 'localhost',
-    path: '/api/test/receive/' + filename,
-    headers: { ...form.getHeaders(), chunkname: arrayChunkName[chunkIndex] },
-  });
-  form.pipe(request);
-}
-
-exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
-  console.log(req.headers);
-  let arrayChunkName = JSON.parse(req.body.arraychunkname);
-  let destination = req.file.destination;
-  let flag = true;
-  arrayChunkName.forEach((chunkName) => {
-    if (!fs.existsSync(destination + chunkName)) {
-      flag = false;
-    }
-  });
-
-  if (flag) {
-    req.body.arraychunkname = arrayChunkName;
-    next();
-  } else {
-    res.status(201).json({
-      message: 'success upload chunk, not enough for concate',
-    });
-
-    return;
-  }
-});
-
-exports.ConcateRequestNEXT = catchAsync(async (req, res, next) => {
-  let arrayChunkName = req.body.arraychunkname;
-  console.log(arrayChunkName);
-  const originalname = req.file.originalname;
-  const destination = 'videos/';
-  // concaterServer(arrayChunkName, destination, originalname);
-  res.status(201).json({
-    message: 'enough for concate',
-  });
-});
-
-exports.ConcateRequest = catchAsync(async (req, res, next) => {
-  let arrayChunkName = req.body.arraychunkname;
-  console.log(req.body.arraychunkname)
-  const originalname = req.params.filename;
-  let flag = true;
-  const destination = 'videos/';
-  arrayChunkName.forEach((chunkName) => {
-    if (!fs.existsSync(destination + chunkName)) {
-      flag = false;
-    }
-  });
-  if (flag) {
-    concaterServer(arrayChunkName, destination, originalname);
-    res.status(201).json({
-      message: 'concated',
-    });
-    return;
-  }
-  res.status(201).json({
-    message: 'still in development',
-  });
-});
-
-async function example() {
-  const client = new ftp.Client();
-  client.ftp.verbose = true;
-  try {
-    await client.access({
-      host: 'localhost',
-      port: 9200,
-      user: 'very',
-      password: 'password',
-      secure: true,
-    });
-    console.log(await client.list());
-    await client.uploadFrom('README.md', 'README_FTP.md');
-    await client.downloadTo('README_COPY.md', 'README_FTP.md');
-  } catch (err) {
-    console.log(err);
-  }
-  client.close();
-}
-
-exports.FTPSend = catchAsync(async (req, res, next) => {
-  const filename = req.params.filename;
-  const videoPath = 'videos/' + filename;
-  if (!fs.existsSync(videoPath)) {
-    console.log('not found video');
-    res.status(200).json({
-      message: 'File not found',
-      path: videoPath,
-    });
-    return;
-  } else {
-    console.log('File converted!: ' + videoPath);
-    const videoSize = fs.statSync(videoPath).size;
-    let chunkName = helperAPI.GenerrateRandomString(7);
-    let arrayChunkName = [];
-    const CHUNK_SIZE = 30 * 1024 * 1024; // 30MB
-    const totalChunks = Math.ceil(videoSize / CHUNK_SIZE);
-
-    res.status(200).json({
-      message: 'File found',
-      path: videoPath,
-    });
-    return;
-  }
-});
-
-exports.FTPReceive = catchAsync(async (req, res, next) => {
-  const filename = req.params.filename;
-  const videoPath = 'videos/' + filename;
-  if (!fs.existsSync(videoPath)) {
-    console.log('not found video');
-    res.status(200).json({
-      message: 'File not found',
-      path: videoPath,
-    });
-    return;
-  } else {
-    example();
-    res.status(200).json({
-      message: 'File found',
-      path: videoPath,
-    });
-    return;
-  }
 });

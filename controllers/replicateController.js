@@ -6,6 +6,11 @@ const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
 var FormData = require('form-data');
 const axios = require('axios');
+const fluentFfmpeg = require('fluent-ffmpeg');
+const ffmpeg = require('fluent-ffmpeg');
+
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+fluentFfmpeg.setFfmpegPath(ffmpegPath);
 
 async function concater(arrayChunkName, destination, filename, ext) {
   arrayChunkName.forEach((chunkName) => {
@@ -13,6 +18,92 @@ async function concater(arrayChunkName, destination, filename, ext) {
     fs.appendFileSync('./' + destination + filename + '.' + ext, data);
     //fs.unlinkSync('./' + destination + chunkName);
   });
+}
+
+async function encodeIntoHls(destination,originalname) {
+  console.log({destination,originalname})
+  const filePath = destination+originalname;
+  const filenameWithoutExt = originalname.split('.')[0];
+  const outputFolder = destination + filenameWithoutExt + 'Hls';
+  const outputResult = outputFolder + '/' + filenameWithoutExt + '.m3u8';
+  fs.access(outputFolder, (error) => {
+    // To check if the given directory
+    // already exists or not
+    if (error) {
+      // If current directory does not exist
+      // then create it
+      fs.mkdir(outputFolder, (error) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('New Directory created successfully !!');
+        }
+      });
+    } else {
+      console.log('Given Directory already exists !!');
+    }
+  });
+  console.log('Do ffmpeg shit');
+
+  await new ffmpeg()
+    .addInput(filePath)
+    .outputOptions([
+      // '-map 0:v',
+      // '-map 0:v',
+      // '-map 0:a',
+      // '-map 0:a',
+      // '-s:v:0 426x240',
+      // '-c:v:0 libx264',
+      // '-b:v:0 400k',
+      // '-c:a:0 aac',
+      // '-b:a:0 64k',
+      // '-s:v:1 640x360',
+      // '-c:v:1 libx264',
+      // '-b:v:1 700k',
+      // '-c:a:1 aac',
+      // '-b:a:1 96k',
+      // //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      // '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      // '-f hls',
+      // '-max_muxing_queue_size 1024',
+      // '-hls_time 4',
+      // '-hls_playlist_type vod',
+      // '-hls_list_size 0',
+      // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+
+      '-c:v copy',
+      '-c:a copy',
+      //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      '-level 3.0',
+      '-start_number 0',
+      '-master_pl_name ' + filenameWithoutExt + '_master.m3u8',
+      '-f hls',
+      '-hls_list_size 0',
+      '-hls_time 10',
+      '-hls_playlist_type vod',
+      // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+    ])
+    .output(outputResult)
+    .on('start', function (commandLine) {
+      console.log('Spawned Ffmpeg with command: ' + commandLine);
+    })
+    .on('error', function (err, stdout, stderr) {
+      console.error('An error occurred: ' + err.message, err, stderr);
+    })
+    .on('progress', function (progress) {
+      console.log('Processing: ' + progress.percent + '% done');
+      console.log(progress);
+      /*percent = progress.percent;
+      res.write('<h1>' + percent + '</h1>');*/
+    })
+    .on('end', function (err, stdout, stderr) {
+      console.log('Finished processing!' /*, err, stdout, stderr*/);
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });
+    })
+    .run();
 }
 
 async function concaterServer(arrayChunkName, destination, originalname) {
@@ -91,6 +182,7 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
 });
 
 exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
+  console.log('received')
   let arrayChunkName = JSON.parse(req.body.arraychunkname);
   let destination = req.file.destination;
   let flag = true;
@@ -117,6 +209,7 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
   console.log(req.body.arraychunkname);
   const originalname = req.body.filename;
+  console.log(originalname)
   let flag = true;
   const destination = 'videos/';
   arrayChunkName.forEach((chunkName) => {
@@ -126,6 +219,8 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   });
   if (flag) {
     concaterServer(arrayChunkName, destination, originalname);
+    encodeIntoHls(destination, originalname);
+
     res.status(201).json({
       message: 'concated',
     });
