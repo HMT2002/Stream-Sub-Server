@@ -43,7 +43,7 @@ const storageFolderFile = multer.diskStorage({
   },
 });
 
-const mutilpartMaxSize = 35 * 1024 * 1024; //35mb
+const multipartMaxSize = 35 * 1024 * 1024; //35mb
 const folderFileMaxSize = 10 * 1024 * 1024; //10mb
 
 const maxSize = 300 * 1024 * 1024; //300mb
@@ -78,12 +78,12 @@ const uploadFile = multer({
 
 const uploadMultipartFile = multer({
   storage: storage,
-  limits: { fileSize: mutilpartMaxSize },
+  limits: { fileSize: multipartMaxSize },
 }).single('myMultilPartFile');
 
 const uploadMultipartFileChunk = multer({
   storage: storageChunk,
-  limits: { fileSize: mutilpartMaxSize },
+  limits: { fileSize: multipartMaxSize },
 }).single('myMultilPartFileChunk');
 
 const uploadFolderFile = multer({

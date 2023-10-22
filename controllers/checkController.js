@@ -9,21 +9,20 @@ const axios = require('axios');
 
 
 exports.CheckFileRequest = catchAsync(async (req, res, next) => {
-  const filename = req.body.filename || 'largetest.mp4';
-  const videoPath = 'videos/' + filename;
-  const url = req.body.url || 'http://localhost';
-  const port = req.body.port || ':9200';
-  if (!fs.existsSync(videoPath)) {
-    console.log('not found video');
+  const filename = req.params.filename || 'World Domination How-ToDash';
+  const filePath = 'videos/' + filename;
+  if (!fs.existsSync(filePath)) {
+    console.log('not found file');
     res.status(201).json({
-      message: 'video not found on ' + url + port + ' path: ' + videoPath,
+      message: 'file not found on path: ' + filePath,
+      existed:false,
     });
     return;
   } else {
-    console.log('found video, deleting...');
-    fs.unlinkSync(videoPath);
     res.status(201).json({
-      message: 'video deleted on ' + url + port + ' path: ' + videoPath,
+      message: 'file existed on path: ' + filePath,
+      existed:true,
+
     });
   }
 });

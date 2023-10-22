@@ -20,9 +20,9 @@ async function concater(arrayChunkName, destination, filename, ext) {
   });
 }
 
-async function encodeIntoHls(destination,originalname) {
-  console.log({destination,originalname})
-  const filePath = destination+originalname;
+async function encodeIntoHls(destination, originalname) {
+  console.log({ destination, originalname });
+  const filePath = destination + originalname;
   const filenameWithoutExt = originalname.split('.')[0];
   const outputFolder = destination + filenameWithoutExt + 'Hls';
   const outputResult = outputFolder + '/' + filenameWithoutExt + '.m3u8';
@@ -88,7 +88,12 @@ async function encodeIntoHls(destination,originalname) {
       console.log('Spawned Ffmpeg with command: ' + commandLine);
     })
     .on('error', function (err, stdout, stderr) {
+
       console.error('An error occurred: ' + err.message, err, stderr);
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });
     })
     .on('progress', function (progress) {
       console.log('Processing: ' + progress.percent + '% done');
@@ -102,6 +107,83 @@ async function encodeIntoHls(destination,originalname) {
         if (err) throw err;
         console.log(filePath + ' deleted!');
       });
+    })
+    .run();
+}
+
+async function encodeIntoDash(destination, originalname) {
+  console.log({ destination, originalname });
+  const filePath = destination + originalname;
+  const filenameWithoutExt = originalname.split('.')[0];
+  const outputFolder = destination + filenameWithoutExt + 'Dash';
+  const outputResult = outputFolder + '/init.mpd';
+  fs.access(outputFolder, (error) => {
+    if (error) {
+      fs.mkdir(outputFolder, (error) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('New Directory created successfully !!');
+        }
+      });
+    } else {
+      console.log('Given Directory already exists !!');
+    }
+  });
+  console.log('Do ffmpeg shit');
+
+  await new ffmpeg()
+    .addInput(filePath)
+    .outputOptions([
+      '-f dash',
+      '-preset veryfast',
+      '-use_timeline 1',
+      '-single_file 0',
+      '-use_template 1',
+      '-seg_duration 10',
+      // '-adaptation_sets "id=0,streams=v id=1,streams=a"',
+      '-init_seg_name init_$RepresentationID$.m4s',
+      '-media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s',
+      '-c:v copy',
+      '-c:a copy',
+      //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+      '-b:v:0 1000k',
+      '-b:v:1 300k',
+      '-s:v:1 320x170',
+      '-bf 1',
+      '-keyint_min 120',
+      '-g 120',
+      '-sc_threshold 0',
+      '-b_strategy 0',
+      '-ar:a:1 22050',
+    ])
+    .outputOption('-adaptation_sets', 'id=0,streams=v id=1,streams=a')
+    .output(outputResult)
+    .on('start', function (commandLine) {
+      console.log('Spawned Ffmpeg with command: ' + commandLine);
+    })
+    .on('error', function (err, stdout, stderr) {
+      console.error('An error occurred: ' + err.message, err, stderr);
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });
+    })
+    .on('progress', function (progress) {
+      console.log('Processing: ' + progress.percent + '% done');
+      console.log(progress);
+      /*percent = progress.percent;
+      res.write('<h1>' + percent + '</h1>');*/
+    })
+    .on('end', function (err, stdout, stderr) {
+      console.log('Finished processing!' /*, err, stdout, stderr*/);
+
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });
+
+
     })
     .run();
 }
@@ -123,9 +205,24 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
     res.status(200).json({
       message: 'File not found',
       path: videoPath,
+      url,
+      port,
     });
     return;
   }
+
+  const baseUrl = url + port + '/api/v1/check/file/' + filename;
+  console.log(baseUrl);
+  const { data: check } = await axios.get(baseUrl);
+  console.log(check);
+  if (check.existed === true) {
+    res.status(200).json({
+      message: 'File already existed on sub server',
+      check,
+    });
+    return;
+  }
+
   console.log('File converted!: ' + videoPath);
   const videoSize = fs.statSync(videoPath).size;
   let chunkName = helperAPI.GenerrateRandomString(7);
@@ -142,37 +239,57 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
     var form = new FormData();
     form.append('myMultilPartFileChunk', readStream);
     form.append('arraychunkname', JSON.stringify(arrayChunkName));
-    axios({
+
+    const { data:send } = await axios({
       method: 'post',
       url: url + port + '/api/v1/replicate/receive',
       data: form,
       headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
-    })
-      .then(function (response) {
-        console.log(response.data);
-        const data = response.data;
-        if (data.message == 'enough for concate') {
-          setTimeout(() => {
-            axios({
-              method: 'post',
-              url: url + port + '/api/v1/replicate/concate',
-              data: {
-                arraychunkname: arrayChunkName,
-                filename: filename,
-              },
-            })
-              .then(function (response) {
-                console.log(response.data);
-              })
-              .catch(function (error) {
-                console.log(error);
-              });
-          }, 5000);
-        }
-      })
-      .catch(function (error) {
-        console.log(error);
+    });
+    console.log(send);
+    if(send.message == 'enough for concate'){
+      const { data:concate } = await axios({
+        method: 'post',
+        url: url + port + '/api/v1/replicate/concate',
+        data: {
+          arraychunkname: arrayChunkName,
+          filename: filename,
+        },
       });
+      console.log(concate);
+    }
+
+    // axios({
+    //   method: 'post',
+    //   url: url + port + '/api/v1/replicate/receive',
+    //   data: form,
+    //   headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
+    // })
+    //   .then(function (response) {
+    //     console.log(response.data);
+    //     const data = response.data;
+    //     if (data.message == 'enough for concate') {
+    //       setTimeout(() => {
+    //         axios({
+    //           method: 'post',
+    //           url: url + port + '/api/v1/replicate/concate',
+    //           data: {
+    //             arraychunkname: arrayChunkName,
+    //             filename: filename,
+    //           },
+    //         })
+    //           .then(function (response) {
+    //             console.log(response.data);
+    //           })
+    //           .catch(function (error) {
+    //             console.log(error);
+    //           });
+    //       }, 5000);
+    //     }
+    //   })
+    //   .catch(function (error) {
+    //     console.log(error);
+    //   });
   }
   res.status(200).json({
     message: 'File found',
@@ -181,8 +298,38 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
   return;
 });
 
+exports.CheckFileBeforeReceive = catchAsync(async (req, res, next) => {
+  console.log('check file before receive');
+  const videoPath='videos/'+req.body.filename;
+  if (fs.existsSync(videoPath)) {
+    res.status(200).json({
+      message: 'Folder already existed on this server',
+      path: videoPath,
+      url,
+      port,
+    });
+    return;
+  }
+  next();
+});
+
+exports.CheckFolderBeforeReceive = catchAsync(async (req, res, next) => {
+  console.log('check folder before receive');
+  const videoPath='videos/'+req.body.filename;
+  if (fs.existsSync(videoPath)) {
+    res.status(200).json({
+      message: 'File already existed on this server',
+      path: videoPath,
+      url,
+      port,
+    });
+    return;
+  }
+  next();
+});
+
 exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
-  console.log('received')
+  console.log('received');
   let arrayChunkName = JSON.parse(req.body.arraychunkname);
   let destination = req.file.destination;
   let flag = true;
@@ -193,7 +340,6 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
   });
   if (flag) {
     console.log('enough');
-    req.body.arraychunkname = arrayChunkName;
     res.status(201).json({
       message: 'enough for concate',
     });
@@ -209,7 +355,7 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
   console.log(req.body.arraychunkname);
   const originalname = req.body.filename;
-  console.log(originalname)
+  console.log(originalname);
   let flag = true;
   const destination = 'videos/';
   arrayChunkName.forEach((chunkName) => {
@@ -219,7 +365,6 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   });
   if (flag) {
     concaterServer(arrayChunkName, destination, originalname);
-    encodeIntoHls(destination, originalname);
 
     res.status(201).json({
       message: 'concated',
@@ -231,42 +376,104 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
-  console.log('replicate folder controller')
-  const filename = req.body.filename || 'World Domination How-ToHls';
-  const videoPath = 'videos/' + filename + '/';
-  const url = req.body.url || 'http://localhost';
-  const port = req.body.port || ':9200';
-
-  const baseUrl = url + port + '/api/v1/check/folder/' + filename;
-  console.log(baseUrl)
-  const {data:check} = await axios.get(baseUrl);
-  console.log(check);
-  if(check.existed===true){
-      res.status(200).json({
-    message: 'Folder already existed on sub server',
-    check,
+const checkEnoughFile=async(arrayChunkName)=>{
+  const destination = 'videos/';
+  arrayChunkName.forEach((chunkName) => {
+    if (!fs.existsSync(destination + chunkName)) {
+      return false;
+    }
   });
-  return;
-  }
+  return true;
+}
 
-  
-    if (!fs.existsSync(videoPath)) {
-    res.status(200).json({
-      message: 'File not found',
-      path: videoPath,
+exports.ConcateAndEncodeToHlsRequest = catchAsync(async (req, res, next) => {
+  let arrayChunkName = req.body.arraychunkname;
+  const originalname = req.body.filename;
+  const destination = 'videos/';
+  let flag = checkEnoughFile(arrayChunkName);
+  if (flag) {
+    concaterServer(arrayChunkName, destination, originalname);
+    encodeIntoHls(destination, originalname);
+
+    const filePath = destination + originalname;
+
+      // fs.unlinkSync(filePath, function (err) {
+      //   if (err) throw err;
+      //   console.log(filePath + ' deleted!');
+      // });
+
+    res.status(201).json({
+      message: 'concated',
     });
     return;
   }
-  console.log('File found!: ' + videoPath);
-  const dir = 'videos/' + filename ;
+  res.status(201).json({
+    message: 'still in development',
+  });
+});
+
+exports.ConcateAndEncodeToDashRequest = catchAsync(async (req, res, next) => {
+  let arrayChunkName = req.body.arraychunkname;
+  const originalname = req.body.filename;
+  const destination = 'videos/';
+  let flag = checkEnoughFile(arrayChunkName);
+  if (flag) {
+    concaterServer(arrayChunkName, destination, originalname);
+    encodeIntoDash(destination, originalname);
+
+    const filePath = destination + originalname;
+
+      // fs.unlinkSync(filePath, function (err) {
+      //   if (err) throw err;
+      //   console.log(filePath + ' deleted!');
+      // });
+
+
+    res.status(201).json({
+      message: 'concated and convert to',
+    });
+    return;
+  }
+  res.status(201).json({
+    message: 'not enough for concate',
+  });
+});
+
+exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
+  console.log('replicate folder controller');
+  const filename = req.body.filename || 'World Domination How-ToHls';
+  const videoFolderPath = 'videos/' + filename + '/';
+  const url = req.body.url || 'http://localhost';
+  const port = req.body.port || ':9200';
+
+  const baseUrl = url + port + '/api/v1/check/file/' + filename;
+  console.log(baseUrl);
+  const { data: check } = await axios.get(baseUrl);
+  console.log(check);
+  if (check.existed === true) {
+    res.status(200).json({
+      message: 'Folder already existed on sub server',
+      check,
+    });
+    return;
+  }
+
+  if (!fs.existsSync(videoFolderPath)) {
+    res.status(200).json({
+      message: 'Folder not found',
+      path: videoFolderPath,
+    });
+    return;
+  }
+  console.log('File found!: ' + videoFolderPath);
+  const dir = 'videos/' + filename;
   console.log(dir);
   const fileList = fs.readdirSync(dir);
   console.log(fileList);
   for (let i = 0; i < fileList.length; i++) {
-    const filePath=videoPath + '/' + fileList[i]
-    console.log(filePath)
-    console.log(fs.existsSync(filePath))
+    const filePath = videoFolderPath + '/' + fileList[i];
+    console.log(filePath);
+    console.log(fs.existsSync(filePath));
     const readStream = fs.createReadStream(filePath);
     var form = new FormData();
     form.append('myFolderFile', readStream);
@@ -274,44 +481,21 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
       method: 'post',
       url: url + port + '/api/v1/replicate/receive-folder',
       data: form,
-      headers: { ...form.getHeaders(), filename: fileList[i],folder:filename },
+      headers: { ...form.getHeaders(), filename: fileList[i], folder: filename },
     });
     console.log(data);
   }
   res.status(200).json({
     message: 'Folder sent!',
-    videoPath,
+    videoFolderPath,
   });
   return;
 });
 
 exports.ReceiveFolderFileFromOtherNode = catchAsync(async (req, res, next) => {
   let destination = req.file.destination;
-  let flag = true;
   res.status(200).json({
     message: 'success receive folder files',
-  });
-});
-
-exports.ConcateFolderRequest = catchAsync(async (req, res, next) => {
-  let arrayChunkName = req.body.arraychunkname;
-  console.log(req.body.arraychunkname);
-  const originalname = req.body.filename;
-  let flag = true;
-  const destination = 'videos/';
-  arrayChunkName.forEach((chunkName) => {
-    if (!fs.existsSync(destination + chunkName)) {
-      flag = false;
-    }
-  });
-  if (flag) {
-    concaterServer(arrayChunkName, destination, originalname);
-    res.status(201).json({
-      message: 'concated',
-    });
-    return;
-  }
-  res.status(201).json({
-    message: 'still in development',
+    destination,
   });
 });

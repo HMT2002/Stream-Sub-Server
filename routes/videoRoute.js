@@ -30,9 +30,10 @@ router.route('/template-hls/:filename').get(videoController.VideoTemplateHLSStre
 
 router.route('/upload-video').post(uploadVideo, videoController.UploadNewFile);
 router.route('/upload-video-large').post(uploadVideo, videoController.UploadNewFileLarge);
-router.route('/upload-video-large-mutilpart').post(uploadMultipartFileChunk, videoController.UploadNewFileLargeMultilpart);
-// router.route('/upload-video-large-mutilpart-concatenate').post( videoController.UploadNewFileLargeMultilpartConcatenate,videoController.UploadNewFileLargeGetVideoThumbnail);
-router.route('/upload-video-large-mutilpart-concatenate').post( videoController.UploadNewFileLargeMultilpartConcatenate,videoController.UploadNewFileLargeConvertToHls);
+router.route('/upload-video-large-multipart').post(uploadMultipartFileChunk, videoController.UploadNewFileLargeMultilpart);
+
+// router.route('/upload-video-large-multipart-concatenate').post( videoController.UploadNewFileLargeMultilpartConcatenate,videoController.UploadNewFileLargeGetVideoThumbnail);
+router.route('/upload-video-large-multipart-concatenate').post( videoController.UploadNewFileLargeMultilpartConcatenate,videoController.UploadNewFileLargeConvertToHls);
 
 
 

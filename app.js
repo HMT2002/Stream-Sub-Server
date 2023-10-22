@@ -9,7 +9,16 @@ const videoController = require('./controllers/videoController');
 const cors = require('cors');
 var path = require('path');
 const fs = require('fs');
-const bodyParser = require('body-parser');
+
+
+//ROUTES
+const videoRoute = require('./routes/videoRoute');
+const replicateRoute = require('./routes/replicateRoute');
+const deleteRoute = require('./routes/deleteRoute');
+const checkRoute = require('./routes/checkRoute');
+const testRoute = require('./routes/testRoute');
+const defaultRouter = require('./routes/defaultRoute');
+
 
 // const client_posts = JSON.parse(fs.readFileSync('./json-resources/client_posts.json'));
 
@@ -50,6 +59,7 @@ app.use((req, res, next) => {
   req.url = decodeURIComponent(req.url);
   next();
 });
+app.use('/api/v1/check', checkRoute);
 
 // #region Handling extra requests, such as subtitle requests
 app.get('/*.vtt', videoController.VTTHandler);
@@ -63,14 +73,7 @@ app.get('/*.m4s', videoController.M4SHandler);
 
 // #endregion
 
-//ROUTES
-const videoRoute = require('./routes/videoRoute');
-const replicateRoute = require('./routes/replicateRoute');
-const deleteRoute = require('./routes/deleteRoute');
-const checkRoute = require('./routes/checkRoute');
 
-const testRoute = require('./routes/testRoute');
-const defaultRouter = require('./routes/defaultRoute');
 
 //app.use('/', defaultRoute);
 
@@ -80,7 +83,6 @@ app.use('/api/default', defaultRouter);
 app.use('/api/v1/video', videoRoute);
 app.use('/api/v1/replicate', replicateRoute);
 app.use('/api/v1/delete', deleteRoute);
-app.use('/api/v1/check', checkRoute);
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));
