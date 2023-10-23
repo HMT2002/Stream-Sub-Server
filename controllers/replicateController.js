@@ -353,16 +353,9 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
 
 exports.ConcateRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
-  console.log(req.body.arraychunkname);
   const originalname = req.body.filename;
-  console.log(originalname);
-  let flag = true;
   const destination = 'videos/';
-  arrayChunkName.forEach((chunkName) => {
-    if (!fs.existsSync(destination + chunkName)) {
-      flag = false;
-    }
-  });
+  let flag = checkEnoughFile(arrayChunkName);
   if (flag) {
     concaterServer(arrayChunkName, destination, originalname);
 
