@@ -90,10 +90,10 @@ async function encodeIntoHls(destination, originalname) {
     .on('error', function (err, stdout, stderr) {
 
       console.error('An error occurred: ' + err.message, err, stderr);
-      fs.unlinkSync(filePath, function (err) {
-        if (err) throw err;
-        console.log(filePath + ' deleted!');
-      });
+      // fs.unlinkSync(filePath, function (err) {
+      //   if (err) throw err;
+      //   console.log(filePath + ' deleted!');
+      // });
     })
     .on('progress', function (progress) {
       console.log('Processing: ' + progress.percent + '% done');
@@ -164,10 +164,10 @@ async function encodeIntoDash(destination, originalname) {
     })
     .on('error', function (err, stdout, stderr) {
       console.error('An error occurred: ' + err.message, err, stderr);
-      fs.unlinkSync(filePath, function (err) {
-        if (err) throw err;
-        console.log(filePath + ' deleted!');
-      });
+      // fs.unlinkSync(filePath, function (err) {
+      //   if (err) throw err;
+      //   console.log(filePath + ' deleted!');
+      // });
     })
     .on('progress', function (progress) {
       console.log('Processing: ' + progress.percent + '% done');
