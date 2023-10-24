@@ -265,7 +265,8 @@ exports.MPDHandler = catchAsync(async (req, res, next) => {
   if (fs.existsSync('./' + req.url)) {
     console.log('mpd is exist');
     const stream = fs.createReadStream('./' + req.url);
-    res.writeHead(206);
+    // res.writeHead(206);
+    // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
     stream.pipe(res);
   } else {
     console.log('mpd is not exist');
@@ -285,7 +286,8 @@ exports.M4SHandler = catchAsync(async (req, res, next) => {
   if (fs.existsSync('./' + req.url)) {
     console.log('m4s is exist');
     const stream = fs.createReadStream('./' + req.url);
-    res.writeHead(206);
+    // res.writeHead(206);
+    // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
     stream.pipe(res);
   } else {
     console.log('m4s is not exist');

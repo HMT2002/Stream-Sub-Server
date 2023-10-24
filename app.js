@@ -38,14 +38,14 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PATCH, DELETE, OPTIONS, HEAD, PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Access-Control-Allow-Headers, Origin,Accept, X-Api-Key, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers, Access-Control-Allow-Headers, Authorization, index'
-  );
+  // res.setHeader(
+  //   'Access-Control-Allow-Headers',
+  //   'Access-Control-Allow-Headers, Origin,Accept, X-Api-Key, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers, Access-Control-Allow-Headers, Authorization, index'
+  // );
 
   // res.setHeader('Access-Control-Allow-Credentials', 'true');
   // res.setHeader('Access-Control-Allow-Methods', '*');
-  // res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
 
   // res.header('Access-Control-Allow-Origin', '*');
   // res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
