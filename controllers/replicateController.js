@@ -436,10 +436,10 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
   console.log('replicate folder controller');
   const filename = req.body.filename || 'World Domination How-ToHls';
   const videoFolderPath = 'videos/' + filename + '/';
-  const url = req.body.url || 'http://localhost';
+  const url = req.body.url || 'localhost';
   const port = req.body.port || ':9200';
 
-  const baseUrl = url + port + '/api/v1/check/file/' + filename;
+  const baseUrl ='http://'+ url + port + '/api/v1/check/file/' + filename;
   console.log(baseUrl);
   const { data: check } = await axios.get(baseUrl);
   console.log(check);
@@ -472,7 +472,7 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
     form.append('myFolderFile', readStream);
     const { data } = await axios({
       method: 'post',
-      url: url + port + '/api/v1/replicate/receive-folder',
+      url:'http://'+ url + port + '/api/v1/replicate/receive-folder',
       data: form,
       headers: { ...form.getHeaders(), filename: fileList[i], folder: filename },
     });
