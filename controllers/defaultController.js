@@ -76,3 +76,17 @@ exports.CheckDashFile = catchAsync(async (req, res, next) => {
     return;
   }
 });
+
+
+exports.CheckIfThisServerIsFckingAlive =catchAsync(async (req, res, next)  => {
+  console.log('Check alive');
+  const host=req.get('host')
+  const fullURL = req.protocol + '://' + host + req.originalUrl;
+  console.log(fullURL);
+res.status(200).json({
+      status: 'alive',
+      message: 'This server is alive',
+      alive:true,
+      fullURL
+    });
+});

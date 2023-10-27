@@ -5,6 +5,8 @@ const app = express();
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
 const videoController = require('./controllers/videoController');
+const testController = require('./controllers/testController');
+const defaultController = require('./controllers/defaultController');
 
 const cors = require('cors');
 var path = require('path');
@@ -59,6 +61,8 @@ app.use((req, res, next) => {
   req.url = decodeURIComponent(req.url);
   next();
 });
+app.get('/is-this-alive', defaultController.CheckIfThisServerIsFckingAlive);
+
 app.use('/api/v1/check', checkRoute);
 
 // #region Handling extra requests, such as subtitle requests
@@ -83,6 +87,8 @@ app.use('/api/default', defaultRouter);
 app.use('/api/v1/video', videoRoute);
 app.use('/api/v1/replicate', replicateRoute);
 app.use('/api/v1/delete', deleteRoute);
+
+
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));

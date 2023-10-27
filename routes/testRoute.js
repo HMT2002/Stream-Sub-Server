@@ -22,6 +22,4 @@ router.route('/video-stream-file/:filename').get(testController.VideoStreamingFi
 router.route('/video-stream-hls/:filename').get(testController.VideoStreamingHLS);
 router.route('/video-proc/convert-stream/:filename').get(testController.VideoConverter);
 router.route('/video-proc/OPTIONSVideoRequest/:filename').options(testController.VideoPlayOPTIONS);
-
-
 module.exports = router;

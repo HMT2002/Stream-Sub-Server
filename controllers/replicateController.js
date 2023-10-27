@@ -48,10 +48,8 @@ async function encodeIntoHls(destination, originalname) {
   await new ffmpeg()
     .addInput(filePath)
     .outputOptions([
-      // '-map 0:v',
-      // '-map 0:v',
-      // '-map 0:a',
-      // '-map 0:a',
+      '-map 0:v',
+      '-map 0:a',
       // '-s:v:0 426x240',
       // '-c:v:0 libx264',
       // '-b:v:0 400k',
