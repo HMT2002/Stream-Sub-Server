@@ -86,7 +86,6 @@ async function encodeIntoHls(destination, originalname) {
       console.log('Spawned Ffmpeg with command: ' + commandLine);
     })
     .on('error', function (err, stdout, stderr) {
-
       console.error('An error occurred: ' + err.message, err, stderr);
       // fs.unlinkSync(filePath, function (err) {
       //   if (err) throw err;
@@ -180,17 +179,19 @@ async function encodeIntoDash(destination, originalname) {
         if (err) throw err;
         console.log(filePath + ' deleted!');
       });
-
-
     })
     .run();
 }
 
 async function concaterServer(arrayChunkName, destination, originalname) {
   arrayChunkName.forEach((chunkName) => {
-    const data = fs.readFileSync('./' + destination + chunkName);
-    fs.appendFileSync('./' + destination + originalname, data);
-    fs.unlinkSync('./' + destination + chunkName);
+    try {
+      const data = fs.readFileSync('./' + destination + chunkName);
+      fs.appendFileSync('./' + destination + originalname, data);
+      fs.unlinkSync('./' + destination + chunkName);
+    } catch (err) {
+      console.log(err);
+    }
   });
 }
 
@@ -238,15 +239,15 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
     form.append('myMultilPartFileChunk', readStream);
     form.append('arraychunkname', JSON.stringify(arrayChunkName));
 
-    const { data:send } = await axios({
+    const { data: send } = await axios({
       method: 'post',
       url: url + port + '/api/v1/replicate/receive',
       data: form,
       headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
     });
     console.log(send);
-    if(send.message == 'enough for concate'){
-      const { data:concate } = await axios({
+    if (send.message == 'enough for concate') {
+      const { data: concate } = await axios({
         method: 'post',
         url: url + port + '/api/v1/replicate/concate',
         data: {
@@ -298,7 +299,7 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
 
 exports.CheckFileBeforeReceive = catchAsync(async (req, res, next) => {
   console.log('check file before receive');
-  const videoPath='videos/'+req.body.filename;
+  const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
       message: 'Folder already existed on this server',
@@ -313,7 +314,7 @@ exports.CheckFileBeforeReceive = catchAsync(async (req, res, next) => {
 
 exports.CheckFolderBeforeReceive = catchAsync(async (req, res, next) => {
   console.log('check folder before receive');
-  const videoPath='videos/'+req.body.filename;
+  const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
       message: 'File already existed on this server',
@@ -367,7 +368,7 @@ exports.ConcateRequest = catchAsync(async (req, res, next) => {
   });
 });
 
-const checkEnoughFile=async(arrayChunkName)=>{
+const checkEnoughFile = async (arrayChunkName) => {
   const destination = 'videos/';
   arrayChunkName.forEach((chunkName) => {
     if (!fs.existsSync(destination + chunkName)) {
@@ -375,7 +376,7 @@ const checkEnoughFile=async(arrayChunkName)=>{
     }
   });
   return true;
-}
+};
 
 exports.ConcateAndEncodeToHlsRequest = catchAsync(async (req, res, next) => {
   let arrayChunkName = req.body.arraychunkname;
@@ -388,10 +389,10 @@ exports.ConcateAndEncodeToHlsRequest = catchAsync(async (req, res, next) => {
 
     const filePath = destination + originalname;
 
-      // fs.unlinkSync(filePath, function (err) {
-      //   if (err) throw err;
-      //   console.log(filePath + ' deleted!');
-      // });
+    // fs.unlinkSync(filePath, function (err) {
+    //   if (err) throw err;
+    //   console.log(filePath + ' deleted!');
+    // });
 
     res.status(201).json({
       message: 'concated',
@@ -414,11 +415,10 @@ exports.ConcateAndEncodeToDashRequest = catchAsync(async (req, res, next) => {
 
     const filePath = destination + originalname;
 
-      // fs.unlinkSync(filePath, function (err) {
-      //   if (err) throw err;
-      //   console.log(filePath + ' deleted!');
-      // });
-
+    // fs.unlinkSync(filePath, function (err) {
+    //   if (err) throw err;
+    //   console.log(filePath + ' deleted!');
+    // });
 
     res.status(201).json({
       message: 'concated and convert to',
@@ -437,7 +437,7 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
   const url = req.body.url || 'localhost';
   const port = req.body.port || ':9200';
 
-  const baseUrl ='http://'+ url + port + '/api/v1/check/file/' + filename;
+  const baseUrl = 'http://' + url + port + '/api/v1/check/file/' + filename;
   console.log(baseUrl);
   const { data: check } = await axios.get(baseUrl);
   console.log(check);
@@ -470,7 +470,7 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
     form.append('myFolderFile', readStream);
     const { data } = await axios({
       method: 'post',
-      url:'http://'+ url + port + '/api/v1/replicate/receive-folder',
+      url: 'http://' + url + port + '/api/v1/replicate/receive-folder',
       data: form,
       headers: { ...form.getHeaders(), filename: fileList[i], folder: filename },
     });
