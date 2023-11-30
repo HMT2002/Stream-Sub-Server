@@ -11,10 +11,14 @@ Cần phải di chuyển vào folder server và bật server lên trước
     npm start
 
 Server được bật lên, tạo các file m3u8 hoặc mpd để xem video HLS, DASH, FLV.
+Không thì download video test ở đây luôn cũng được.
+https://drive.google.com/file/d/1bV1_ObTIWUqQ_q_kbIOSUSWvXBKfHTTR/view?usp=sharing
+Giải nén ra folder `videos/`
 Truy cập vào các đường dẫn để xem video
 
-    http://localhost:9100/videos/convert/<Tên video>.m3u8
-    http://localhost:9100/videos/<Tên của video>/init.mpd
+    http://localhost:9100/videos/<Tên video>Hls/<Tên video>.m3u8
+    http://localhost:9100/videos/<Tên của video>Dash/init.mpd
+    http://localhost:9100/videos/flyingwitch_ep01Hls/flyingwitch_ep01.m3u8 (nếu dùng folder test bên trên)
 
 (1936 = 1935 + SERVERINDEX)
 Để tạo folder Hls hoặc Dash thì dùng các command có sẵn

@@ -68,9 +68,13 @@ async function encodeIntoHls(destination, originalname) {
       // '-hls_playlist_type vod',
       // '-hls_list_size 0',
       // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
-
-      '-c:v copy',
-      '-c:a copy',
+      
+      '-map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:a:0',
+      '-c:v libx265 -crf 22',
+      '-c:a aac -ar 44100',
+      '-filter:v:0 scale=w=480:h=360  -maxrate:v:0 600k -b:a:0 500k' ,
+      '-filter:v:1 scale=w=640:h=480  -maxrate:v:1 1500k -b:a:1 1000k',
+      '-filter:v:2 scale=w=1280:h=720 -maxrate:v:2 3000k -b:a:2 2000k' ,
       //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
       '-level 3.0',
       '-start_number 0',
