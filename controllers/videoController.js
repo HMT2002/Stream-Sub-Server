@@ -3,7 +3,6 @@ const path = require('path');
 const helperAPI = require('../modules/helperAPI');
 const firebaseAPI = require('../modules/firebaseAPI');
 
-
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
@@ -34,14 +33,14 @@ exports.UploadNewFileDrive = catchAsync(async (req, res, next) => {
   };
   const driveAPIResponse = await driveAPI(videoMetaData, videoMedia);
   const driveID = driveAPIResponse.data.id;
-  if(driveAPIResponse.data.id!=='unavailable'){
-      fs.unlink(file.path, (err) => {
-    if (err) {
-      console.log(err);
-    } else {
-      console.log('deleted file');
-    }
-  });
+  if (driveAPIResponse.data.id !== 'unavailable') {
+    fs.unlink(file.path, (err) => {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log('deleted file');
+      }
+    });
   }
 
   console.log(driveID);
@@ -204,98 +203,89 @@ exports.MP4MPDHandler = catchAsync(async (req, res, next) => {
   // Example: "bytes=32324-"
   const CHUNK_SIZE = 10 ** 6; // 1MB nên để tầm nhiêu đây thôi, chunk size cao hơn dễ bị lỗi
   const start = Number(range.replace(/\D/g, ''));
-  console.log('start')
+  console.log('start');
   console.log(start);
   const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
-  console.log('end')
-  console.log(end)
+  console.log('end');
+  console.log(end);
 
   console.log(req.range());
 
-  if(req.range()!==-1){
-      console.log('req.range');
-  console.log(req.range()[0])
-  console.log(range)
-  // Create headers
-  const contentLength = req.range()[0].end - req.range()[0].start + 1;
-  console.log('contentLength');
-  console.log(contentLength)
-  const headers = {
-    'Content-Range': range+'/'+videoSize,
-    'Accept-Ranges': 'bytes',
-    'Content-Length': contentLength,
-    'Content-Type': 'video/mp4',
-  };
+  if (req.range() !== -1) {
+    console.log('req.range');
+    console.log(req.range()[0]);
+    console.log(range);
+    // Create headers
+    const contentLength = req.range()[0].end - req.range()[0].start + 1;
+    console.log('contentLength');
+    console.log(contentLength);
+    const headers = {
+      'Content-Range': range + '/' + videoSize,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': contentLength,
+      'Content-Type': 'video/mp4',
+    };
 
-  // HTTP Status 206 for Partial Content
-  res.writeHead(206, headers);
+    // HTTP Status 206 for Partial Content
+    res.writeHead(206, headers);
 
-  // create video read stream for this particular chunk
-  const videoStream = fs.createReadStream(videoPath, { start:req.range()[0].start, end:req.range()[0].end });
-  // const videoStream = fs.createReadStream(videoPath);
+    // create video read stream for this particular chunk
+    const videoStream = fs.createReadStream(videoPath, { start: req.range()[0].start, end: req.range()[0].end });
+    // const videoStream = fs.createReadStream(videoPath);
 
-  // Stream the video chunk to the client
-  videoStream.pipe(res);
+    // Stream the video chunk to the client
+    videoStream.pipe(res);
+  } else {
+    // Create headers
+    const contentLength = end - start + 1;
+    const headers = {
+      'Content-Range': `bytes ${start}-${end}/${videoSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': contentLength,
+      'Content-Type': 'video/mp4',
+    };
+    // HTTP Status 206 for Partial Content
+    res.writeHead(206, headers);
+    // create video read stream for this particular chunk
+    const videoStream = fs.createReadStream(videoPath, { start, end });
+    // Stream the video chunk to the client
+    videoStream.pipe(res);
   }
-  else{
-  // Create headers
-  const contentLength = end - start + 1;
-  const headers = {
-    'Content-Range': `bytes ${start}-${end}/${videoSize}`,
-    'Accept-Ranges': 'bytes',
-    'Content-Length': contentLength,
-    'Content-Type': 'video/mp4',
-  };
-  // HTTP Status 206 for Partial Content
-  res.writeHead(206, headers);
-  // create video read stream for this particular chunk
-  const videoStream = fs.createReadStream(videoPath, { start, end });
-  // Stream the video chunk to the client
-  videoStream.pipe(res);
-  }
-
 });
 
 exports.MPDHandler = catchAsync(async (req, res, next) => {
   console.log('mpd is here');
   console.log(req.url);
-  console.log(__dirname);
 
-  // console.log(req);
   if (fs.existsSync('./' + req.url)) {
     console.log('mpd is exist');
     const stream = fs.createReadStream('./' + req.url);
     // res.writeHead(206);
     // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
+    res.setHeader('Content-Type', 'application/dash+xml');
+    res.statusCode = 200;
     stream.pipe(res);
   } else {
     console.log('mpd is not exist');
-    res.status(500).json({
-      status: 500,
-      message: 'Mpd is not exist! ' + req.url,
-      path: req.url,
-    });
+    res.end();
+    return;
   }
 });
 exports.M4SHandler = catchAsync(async (req, res, next) => {
   console.log('m4s is here');
   console.log(req.url);
-  console.log(__dirname);
-
-  // console.log(req);
   if (fs.existsSync('./' + req.url)) {
     console.log('m4s is exist');
     const stream = fs.createReadStream('./' + req.url);
     // res.writeHead(206);
     // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
+    res.setHeader('Content-Type', 'video/iso.segment');
+    res.statusCode = 200;
     stream.pipe(res);
   } else {
     console.log('m4s is not exist');
-    res.status(500).json({
-      status: 500,
-      message: 'M4s is not exist! ' + req.url,
-      path: req.url,
-    });
+    res.end();
+    return;
   }
 });
 
@@ -340,7 +330,6 @@ exports.TsHandler = catchAsync(async (req, res, next) => {
     });
   }
 });
-
 
 exports.GetVideoThumbnail = catchAsync(async (req, res, next) => {
   //console.log(req);
@@ -806,7 +795,6 @@ exports.VideoPlayOPTIONS = catchAsync(async (req, res, next) => {
     .run();
 });
 
-
 exports.UploadNewFile = async (req, res) => {
   //console.log(req);
   const file = req.file;
@@ -864,7 +852,7 @@ exports.UploadNewFileLarge = async (req, res) => {
 };
 
 exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
-  console.log('use '+req.method+' UploadNewFileLargeMultilpart')
+  console.log('use ' + req.method + ' UploadNewFileLargeMultilpart');
   console.log('Dealing with request');
   //console.log(req.headers);
   const file = req.file;
@@ -934,7 +922,6 @@ exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, ne
   next();
 });
 
-
 exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) => {
   const file = req.file;
   const filePath = file.path;
@@ -996,7 +983,7 @@ exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
   const destination = file.destination;
   const filenameWithoutExt = file.filename.split('.')[0];
   const outputFolder = destination + filenameWithoutExt + 'Hls';
-  const outputResult=outputFolder+'/'+filenameWithoutExt+'.m3u8';
+  const outputResult = outputFolder + '/' + filenameWithoutExt + '.m3u8';
   fs.access(outputFolder, (error) => {
     // To check if the given directory
     // already exists or not
@@ -1065,13 +1052,12 @@ exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
       // '-hls_list_size 0',
       // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
 
-
       '-c:v copy',
       '-c:a copy',
       //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
       '-level 3.0',
       '-start_number 0',
-      '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      '-master_pl_name ' + filenameWithoutExt + '_master.m3u8',
       '-f hls',
       '-hls_list_size 0',
       '-hls_time 10',
@@ -1096,9 +1082,10 @@ exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
       fs.unlinkSync(filePath, function (err) {
         if (err) throw err;
         console.log(filePath + ' deleted!');
-      });      res.status(201).json({
+      });
+      res.status(201).json({
         status: 'success concat, convert to Hls',
-        path:outputResult,
+        path: outputResult,
       });
     })
     .run();
