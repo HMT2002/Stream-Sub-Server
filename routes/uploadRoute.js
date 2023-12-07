@@ -9,6 +9,7 @@ const {
   uploadMultipartFileChunk,
   uploadFolderFile,
   uploadMultipartFileChunkV2,
+  uploadIndividualFile,
 } = require('../modules/multerAPI.js');
 const router = express.Router();
 
@@ -16,5 +17,11 @@ const router = express.Router();
 router
   .route('/')
   .post(uploadController.CheckFileBeforeReceive, uploadMultipartFileChunk, uploadController.ReceiveFileFromOtherNode);
-
+router
+  .route('/file')
+  .post(
+    uploadController.CheckFileBeforeReceive,
+    uploadIndividualFile,
+    uploadController.ReceiveIndividualFileFromOtherNode
+  );
 module.exports = router;
