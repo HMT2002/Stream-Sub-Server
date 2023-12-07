@@ -310,7 +310,7 @@ exports.CheckFileBeforeReceive = catchAsync(async (req, res, next) => {
   const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
-      message: 'Folder already existed on this server',
+      message: 'File already existed on this server',
       path: videoPath,
       url,
       port,
@@ -325,7 +325,7 @@ exports.CheckFolderBeforeReceive = catchAsync(async (req, res, next) => {
   const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
-      message: 'File already existed on this server',
+      message: 'Folder already existed on this server',
       path: videoPath,
       url,
       port,
@@ -495,6 +495,59 @@ exports.ReceiveFolderFileFromOtherNode = catchAsync(async (req, res, next) => {
   let destination = req.file.destination;
   res.status(200).json({
     message: 'success receive folder files',
+    destination,
+  });
+});
+exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => {
+  console.log('replicate file controller');
+  const filename = req.body.filename || '';
+  const filePath = 'videos/' + filename;
+  const url = req.body.url || 'localhost';
+  const port = req.body.port || '';
+
+  const baseUrl = 'http://' + url + port + '/api/v1/check/file/' + filename;
+  console.log(baseUrl);
+  const { data: check } = await axios.get(baseUrl);
+  console.log(check);
+  if (check.existed === true) {
+    res.status(200).json({
+      message: 'File already existed on sub server',
+      check,
+    });
+    return;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    res.status(200).json({
+      message: 'File not found',
+      path: filePath,
+    });
+    return;
+  }
+  console.log('File found!: ' + filePath);
+  console.log(filePath);
+  console.log(fs.existsSync(filePath));
+  const readStream = fs.createReadStream(filePath);
+  var form = new FormData();
+  form.append('myIndividualFile', readStream);
+  const { data } = await axios({
+    method: 'post',
+    url: 'http://' + url + port + '/api/v1/replicate/receive-file',
+    data: form,
+    headers: { ...form.getHeaders(), filename: filename },
+  });
+  console.log(data);
+  res.status(200).json({
+    message: 'File sent!',
+    filePath,
+  });
+  return;
+});
+
+exports.ReceiveIndividualFileFromOtherNode = catchAsync(async (req, res, next) => {
+  let destination = req.file.destination;
+  res.status(200).json({
+    message: 'success receive individual files',
     destination,
   });
 });
