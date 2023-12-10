@@ -977,116 +977,116 @@ exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) 
     .run();
 });
 
-exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
-  const file = req.file;
-  const filePath = file.path;
-  const destination = file.destination;
-  const filenameWithoutExt = file.filename.split('.')[0];
-  const outputFolder = destination + filenameWithoutExt + 'Hls';
-  const outputResult = outputFolder + '/' + filenameWithoutExt + '.m3u8';
-  fs.access(outputFolder, (error) => {
-    // To check if the given directory
-    // already exists or not
-    if (error) {
-      // If current directory does not exist
-      // then create it
-      fs.mkdir(outputFolder, (error) => {
-        if (error) {
-          console.log(error);
-        } else {
-          console.log('New Directory created successfully !!');
-        }
-      });
-    } else {
-      console.log('Given Directory already exists !!');
-    }
-  });
-  console.log(file);
-  console.log('Do ffmpeg shit');
+// exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
+//   const file = req.file;
+//   const filePath = file.path;
+//   const destination = file.destination;
+//   const filenameWithoutExt = file.filename.split('.')[0];
+//   const outputFolder = destination + filenameWithoutExt + 'Hls';
+//   const outputResult = outputFolder + '/' + filenameWithoutExt + '.m3u8';
+//   fs.access(outputFolder, (error) => {
+//     // To check if the given directory
+//     // already exists or not
+//     if (error) {
+//       // If current directory does not exist
+//       // then create it
+//       fs.mkdir(outputFolder, (error) => {
+//         if (error) {
+//           console.log(error);
+//         } else {
+//           console.log('New Directory created successfully !!');
+//         }
+//       });
+//     } else {
+//       console.log('Given Directory already exists !!');
+//     }
+//   });
+//   console.log(file);
+//   console.log('Do ffmpeg shit');
 
-  // await fluentFfmpeg(filePath)
-  //   .on('end', async function () {
-  //     console.log('Hls Converted');
+//   // await fluentFfmpeg(filePath)
+//   //   .on('end', async function () {
+//   //     console.log('Hls Converted');
 
-  //     await fluentFfmpeg(filePath)
-  //       .on(
-  //         'filenames',
-  //         catchAsync(async (filenames) => {
-  //           console.log('Hls are ' + filenames.join(', '));
-  //         })
-  //       )
-  //       .on('end', async function () {
-  //         console.log('Hls Converted');
-  //  res.status(201).json({
-  //    status: 'success concat, convert to Hls',
-  //    file,
-  //  });       });
-  //   })
-  //   .output(outputFolder + '/scans-%04d.png')
-  //   .outputOptions('-vf', 'fps=1/8')
-  //   .run();
+//   //     await fluentFfmpeg(filePath)
+//   //       .on(
+//   //         'filenames',
+//   //         catchAsync(async (filenames) => {
+//   //           console.log('Hls are ' + filenames.join(', '));
+//   //         })
+//   //       )
+//   //       .on('end', async function () {
+//   //         console.log('Hls Converted');
+//   //  res.status(201).json({
+//   //    status: 'success concat, convert to Hls',
+//   //    file,
+//   //  });       });
+//   //   })
+//   //   .output(outputFolder + '/scans-%04d.png')
+//   //   .outputOptions('-vf', 'fps=1/8')
+//   //   .run();
 
-  await new ffmpeg()
-    .addInput(filePath)
-    .outputOptions([
-      // '-map 0:v',
-      // '-map 0:v',
-      // '-map 0:a',
-      // '-map 0:a',
-      // '-s:v:0 426x240',
-      // '-c:v:0 libx264',
-      // '-b:v:0 400k',
-      // '-c:a:0 aac',
-      // '-b:a:0 64k',
-      // '-s:v:1 640x360',
-      // '-c:v:1 libx264',
-      // '-b:v:1 700k',
-      // '-c:a:1 aac',
-      // '-b:a:1 96k',
-      // //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
-      // '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
-      // '-f hls',
-      // '-max_muxing_queue_size 1024',
-      // '-hls_time 4',
-      // '-hls_playlist_type vod',
-      // '-hls_list_size 0',
-      // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+//   await new ffmpeg()
+//     .addInput(filePath)
+//     .outputOptions([
+//       // '-map 0:v',
+//       // '-map 0:v',
+//       // '-map 0:a',
+//       // '-map 0:a',
+//       // '-s:v:0 426x240',
+//       // '-c:v:0 libx264',
+//       // '-b:v:0 400k',
+//       // '-c:a:0 aac',
+//       // '-b:a:0 64k',
+//       // '-s:v:1 640x360',
+//       // '-c:v:1 libx264',
+//       // '-b:v:1 700k',
+//       // '-c:a:1 aac',
+//       // '-b:a:1 96k',
+//       // //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+//       // '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+//       // '-f hls',
+//       // '-max_muxing_queue_size 1024',
+//       // '-hls_time 4',
+//       // '-hls_playlist_type vod',
+//       // '-hls_list_size 0',
+//       // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
 
-      '-c:v copy',
-      '-c:a copy',
-      //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
-      '-level 3.0',
-      '-start_number 0',
-      '-master_pl_name ' + filenameWithoutExt + '_master.m3u8',
-      '-f hls',
-      '-hls_list_size 0',
-      '-hls_time 10',
-      '-hls_playlist_type vod',
-      // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
-    ])
-    .output(outputResult)
-    .on('start', function (commandLine) {
-      console.log('Spawned Ffmpeg with command: ' + commandLine);
-    })
-    .on('error', function (err, stdout, stderr) {
-      console.error('An error occurred: ' + err.message, err, stderr);
-    })
-    .on('progress', function (progress) {
-      console.log('Processing: ' + progress.percent + '% done');
-      console.log(progress);
-      /*percent = progress.percent;
-      res.write('<h1>' + percent + '</h1>');*/
-    })
-    .on('end', function (err, stdout, stderr) {
-      console.log('Finished processing!' /*, err, stdout, stderr*/);
-      fs.unlinkSync(filePath, function (err) {
-        if (err) throw err;
-        console.log(filePath + ' deleted!');
-      });
-      res.status(201).json({
-        status: 'success concat, convert to Hls',
-        path: outputResult,
-      });
-    })
-    .run();
-});
+//       '-c:v copy',
+//       '-c:a copy',
+//       //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
+//       '-level 3.0',
+//       '-start_number 0',
+//       '-master_pl_name ' + filenameWithoutExt + '_master.m3u8',
+//       '-f hls',
+//       '-hls_list_size 0',
+//       '-hls_time 10',
+//       '-hls_playlist_type vod',
+//       // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
+//     ])
+//     .output(outputResult)
+//     .on('start', function (commandLine) {
+//       console.log('Spawned Ffmpeg with command: ' + commandLine);
+//     })
+//     .on('error', function (err, stdout, stderr) {
+//       console.error('An error occurred: ' + err.message, err, stderr);
+//     })
+//     .on('progress', function (progress) {
+//       console.log('Processing: ' + progress.percent + '% done');
+//       console.log(progress);
+//       /*percent = progress.percent;
+//       res.write('<h1>' + percent + '</h1>');*/
+//     })
+//     .on('end', function (err, stdout, stderr) {
+//       console.log('Finished processing!' /*, err, stdout, stderr*/);
+//       fs.unlinkSync(filePath, function (err) {
+//         if (err) throw err;
+//         console.log(filePath + ' deleted!');
+//       });
+//       res.status(201).json({
+//         status: 'success concat, convert to Hls',
+//         path: outputResult,
+//       });
+//     })
+//     .run();
+// });

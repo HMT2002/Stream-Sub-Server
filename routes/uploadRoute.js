@@ -14,9 +14,7 @@ const {
 const router = express.Router();
 
 //ROUTE HANDLER
-router
-  .route('/')
-  .post(uploadController.CheckFileBeforeReceive, uploadMultipartFileChunk, uploadController.ReceiveFileFromOtherNode);
+
 router
   .route('/file')
   .post(
@@ -24,4 +22,7 @@ router
     uploadIndividualFile,
     uploadController.ReceiveIndividualFileFromOtherNode
   );
+router
+  .route('/')
+  .post(uploadController.CheckFileBeforeReceive, uploadMultipartFileChunk, uploadController.ReceiveFileFromOtherNode);
 module.exports = router;

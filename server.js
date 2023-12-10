@@ -47,7 +47,6 @@ new hls(server, {
       cb(null, stream);
     },
     getSegmentStream: (req, cb) => {
-      console.log(req.headers);
       req.url = decodeURIComponent(req.url);
       console.log('server js getSegmentStream ' + req.url);
       const stream = fs.createReadStream(__dirname + req.url);

@@ -13,7 +13,6 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
 
-
 exports.CheckInput = (req, res, next, value) => {
   console.log('ID value is: ' + value);
   var isInvalid = false;
@@ -30,8 +29,6 @@ exports.CheckInput = (req, res, next, value) => {
   }
   next();
 };
-
-
 
 exports.UploadNewFile = async (req, res) => {
   //console.log(req);
@@ -88,7 +85,6 @@ exports.UploadNewFileLarge = async (req, res) => {
     videoMedia,
   });
 };
-
 
 exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
   console.log('Dealing with request');
@@ -221,7 +217,7 @@ exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
   const destination = file.destination;
   const filenameWithoutExt = file.filename.split('.')[0];
   const outputFolder = destination + filenameWithoutExt + 'Hls';
-  const outputResult=outputFolder+'/'+filenameWithoutExt+'.m3u8';
+  const outputResult = outputFolder + '/' + filenameWithoutExt + '.m3u8';
   fs.access(outputFolder, (error) => {
     // To check if the given directory
     // already exists or not
@@ -290,13 +286,12 @@ exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
       // '-hls_list_size 0',
       // // '-hls_segment_filename ./videos/output/v%v/segment%03d.ts',
 
-
       '-c:v copy',
       '-c:a copy',
       //'-var_stream_map', '"v:0,a:0 v:1,a:1"',
       '-level 3.0',
       '-start_number 0',
-      '-master_pl_name '+filenameWithoutExt+'_master.m3u8',
+      '-master_pl_name ' + filenameWithoutExt + '_master.m3u8',
       '-f hls',
       '-hls_list_size 0',
       '-hls_time 10',
@@ -321,9 +316,10 @@ exports.UploadNewFileLargeConvertToHls = catchAsync(async (req, res, next) => {
       fs.unlinkSync(filePath, function (err) {
         if (err) throw err;
         console.log(filePath + ' deleted!');
-      });      res.status(201).json({
+      });
+      res.status(201).json({
         status: 'success concat, convert to Hls',
-        path:outputResult,
+        path: outputResult,
       });
     })
     .run();

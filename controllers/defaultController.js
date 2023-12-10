@@ -80,7 +80,7 @@ exports.CheckIfThisServerIsFckingAlive = catchAsync(async (req, res, next) => {
   console.log('Check alive');
   const host = req.get('host');
   const testURL = req.protocol + '://' + host + req.originalUrl;
-  const uploadURL = req.protocol + '://' + host + '/api/v1/upload';
+  const uploadURL = req.protocol + '://' + host + '/api/v1/upload/';
   console.log(uploadURL);
   res.status(200).json({
     status: 'alive',
