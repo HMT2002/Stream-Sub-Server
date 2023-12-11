@@ -76,7 +76,7 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
     let arrayChunkName = req.body.arraychunkname;
     const originalname = req.body.filename;
     encodeAPI.concaterServer(arrayChunkName, destination, originalname);
-    encodeAPI.encodeIntoDash(destination, originalname);
+    encodeAPI.encodeIntoDashVer2(destination, originalname);
     res.status(201).json({
       message: 'concated and converted!',
     });
