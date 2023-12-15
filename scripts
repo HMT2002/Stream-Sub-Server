@@ -1,0 +1,7 @@
+curl -s https://deb.nodesource.com/setup_20.x | sudo bash
+sudo apt install nodejs -y
+node -v
+sudo cp default /etc/nginx/sites-enabled/default
+sudo cp nginx.conf /etc/nginx/nginx.conf
+sudo nginx -t
+sudo service nginx restart
