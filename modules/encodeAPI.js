@@ -158,25 +158,30 @@ const encodeIntoDashVer2 = async (destination, originalname) => {
   });
   console.log('Do ffmpeg shit');
 
-  let command0=
-    '-re -i '+filePath+' -map 0 -map 0 -preset ultrafast -c:s srt -sn -c:v libx264 -c:a aac -b:v:0 750k -filter:v:0 scale=-2:480 -b:v:1 1000k -filter:v:1 scale=-2:720 -b:v:2 1500k -filter:v:2 scale=-2:1080 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
-      outputResult;
-      let command1=
-      '-re -i '+filePath+' -map 0 -map 0 -preset ultrafast -c:s srt -sn -c:v libx264 -c:a aac -vf format=yuv420p -b:v:0 300k -s:v:0 720x480 -b:v:1 700k -s:v:1 1080x720 -b:v:2 1300k -s:v:2 1920x10800 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
-        outputResult;
-  executeFfmpeg(command1
-  )
+  let command0 =
+    '-re -i ' +
+    filePath +
+    ' -map 0 -map 0 -preset ultrafast -c:s srt -sn -c:v libx264 -c:a aac -b:v:0 750k -filter:v:0 scale=-2:480 -b:v:1 1000k -filter:v:1 scale=-2:720 -b:v:2 1500k -filter:v:2 scale=-2:1080 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
+    outputResult;
+  let command1 =
+    '-re -i ' +
+    filePath +
+    ' -map 0 -map 0 -preset ultrafast -crf 28 -c:s srt -sn -c:v libx264 -c:a aac -vf format=yuv420p -b:v:0 300k -s:v:0 720x480 -b:v:1 700k -s:v:1 1080x720 -b:v:2 1300k -s:v:2 1920x10800 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
+    outputResult;
+  executeFfmpeg(command1)
     .on('start', (commandLine) => console.log('start', commandLine))
     .on('codecData', (codecData) => console.log('codecData', codecData))
     .on('error', (error) => console.log('error', error))
-    .on('stderr', (stderr) =>{ console.log('stderr', stderr)
-  })
-  .on('end', (end) =>{ console.log('end', end);
-  fs.unlinkSync(filePath, function (err) {
-    if (err) throw err;
-    console.log(filePath + ' deleted!');
-  });
-})
+    .on('stderr', (stderr) => {
+      console.log('stderr', stderr);
+    })
+    .on('end', (end) => {
+      console.log('end', end);
+      fs.unlinkSync(filePath, function (err) {
+        if (err) throw err;
+        console.log(filePath + ' deleted!');
+      });
+    })
     .run();
 };
 
