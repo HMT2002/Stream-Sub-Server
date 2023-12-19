@@ -66,7 +66,7 @@ const individualFileMaxSize = 10 * 1024 * 1024; //10mb
 
 const maxSize = 300 * 1024 * 1024; //300mb
 const maxSizeVideo = 300 * 1024 * 1024; //300mb
-const maxSizeImage = 15 * 1024 * 1024; //10mb
+const maxSizeImage = 15 * 1024 * 1024; //15mb
 
 const upload = multer({
   storage: storage,
