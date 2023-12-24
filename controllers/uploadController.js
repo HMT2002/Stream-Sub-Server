@@ -13,6 +13,7 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
+const { setTimeout } = require('timers/promises');
 
 async function concater(arrayChunkName, destination, filename, ext) {
   arrayChunkName.forEach((chunkName) => {
@@ -73,10 +74,12 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
     }
   });
   if (flag) {
+    console.log('Enough for concate');
     let arrayChunkName = req.body.arraychunkname;
     const originalname = req.body.filename;
+    const statusID = req.body.statusID;
     encodeAPI.concaterServer(arrayChunkName, destination, originalname);
-    encodeAPI.encodeIntoDashVer2(destination, originalname);
+    encodeAPI.encodeIntoDashVer2(destination, originalname, statusID);
     res.status(201).json({
       message: 'concated and converted!',
     });

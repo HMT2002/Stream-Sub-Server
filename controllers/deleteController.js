@@ -7,12 +7,11 @@ const APIFeatures = require('../utils/apiFeatures');
 var FormData = require('form-data');
 const axios = require('axios');
 
-
 exports.ReceiveDeleteRequest = catchAsync(async (req, res, next) => {
   const filename = req.body.filename || 'largetest.mp4';
   const videoPath = 'videos/' + filename;
   const url = req.body.url || 'http://localhost';
-  const port = req.body.port || ':9200';
+  const port = req.body.port || '';
   if (!fs.existsSync(videoPath)) {
     console.log('not found video');
     res.status(201).json({
@@ -31,7 +30,7 @@ exports.ReceiveDeleteFolderRequest = catchAsync(async (req, res, next) => {
   const filename = req.body.filename || '7ZXNZYOHls';
   const videoFolderPath = 'videos/' + filename;
   const url = req.body.url || 'http://localhost';
-  const port = req.body.port || ':9200';
+  const port = req.body.port || '';
   if (!fs.existsSync(videoFolderPath)) {
     console.log('not found path');
     res.status(201).json({
@@ -39,23 +38,20 @@ exports.ReceiveDeleteFolderRequest = catchAsync(async (req, res, next) => {
     });
   } else {
     console.log('found path, deleting...');
-    
+
     const fileList = fs.readdirSync(videoFolderPath);
     console.log(fileList);
     for (let i = 0; i < fileList.length; i++) {
       const videoPath = videoFolderPath + '/' + fileList[i];
       console.log(videoPath);
       fs.unlinkSync(videoPath);
-
     }
-    fs.rmdir(videoFolderPath,() => { 
-      console.log("Folder Deleted!"); 
-    }); 
+    fs.rmdir(videoFolderPath, () => {
+      console.log('Folder Deleted!');
+    });
 
     res.status(201).json({
       message: 'path deleted on ' + url + port + ' path: ' + videoFolderPath,
     });
   }
 });
-
-

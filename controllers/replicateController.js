@@ -209,7 +209,7 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
   const filename = req.body.filename || 'largetest.mp4';
   const videoPath = 'videos/' + filename;
   const url = req.body.url || 'http://localhost';
-  const port = req.body.port || ':9200';
+  const port = req.body.port || '';
   if (!fs.existsSync(videoPath)) {
     res.status(200).json({
       message: 'File not found',

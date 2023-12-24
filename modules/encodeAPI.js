@@ -4,6 +4,9 @@ const path = require('path');
 const axios = require('axios');
 const fluentFfmpeg = require('fluent-ffmpeg');
 const ffmpeg = require('fluent-ffmpeg');
+const Video = require('../models/mongo/Video');
+const VideoStatus = require('../models/mongo/VideoStatus');
+const Server = require('../models/mongo/Server');
 
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
@@ -137,12 +140,13 @@ const executeFfmpeg = (args) => {
   return command;
 };
 
-const encodeIntoDashVer2 = async (destination, originalname) => {
+const encodeIntoDashVer2 = async (destination, originalname, statusID) => {
   console.log({ destination, originalname });
   const filePath = destination + originalname;
   const filenameWithoutExt = originalname.split('.')[0];
   const outputFolder = destination + filenameWithoutExt + 'Dash';
   const outputResult = outputFolder + '/init.mpd';
+  const videoStatus = await VideoStatus.findById(statusID);
   fs.access(outputFolder, (error) => {
     if (error) {
       fs.mkdir(outputFolder, (error) => {
@@ -157,7 +161,9 @@ const encodeIntoDashVer2 = async (destination, originalname) => {
     }
   });
   console.log('Do ffmpeg shit');
-
+  let startTime;
+  let encodeDuration = 0;
+  let videoDuration = 0;
   let command0 =
     '-re -i ' +
     filePath +
@@ -166,21 +172,50 @@ const encodeIntoDashVer2 = async (destination, originalname) => {
   let command1 =
     '-re -i ' +
     filePath +
-    ' -map 0 -map 0 -preset ultrafast -crf 28 -c:s srt -sn -c:v libx264 -c:a copy -vf format=yuv420p -b:v:0 300k -s:v:0 720x480 -b:v:1 700k -s:v:1 1080x720 -b:v:2 1300k -s:v:2 1920x1080 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
+    ' -map 0:v -map 0:a -preset ultrafast -crf 28 -c:s srt -sn -c:v libx264 -c:a copy -vf format=yuv420p -b:v:0 300k -s:v:0 720x480 -b:v:1 700k -s:v:1 1080x720 -b:v:2 1300k -s:v:2 1920x1080 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
     outputResult;
+  fluentFfmpeg.ffprobe(filePath, function (error, metadata) {
+    console.log('Video duration: ' + metadata.format.duration);
+    videoDuration = metadata.format.duration;
+  });
   executeFfmpeg(command1)
-    .on('start', (commandLine) => console.log('start', commandLine))
+    .on('start', async (commandLine) => {
+      console.log('start', commandLine);
+      startTime = new Date().getTime();
+      videoStatus.status = 'encoding';
+      await videoStatus.save();
+    })
     .on('codecData', (codecData) => console.log('codecData', codecData))
     .on('error', (error) => console.log('error', error))
     .on('stderr', (stderr) => {
       console.log('stderr', stderr);
     })
-    .on('end', (end) => {
+    .on('end', async (end) => {
       console.log('end', end);
       fs.unlinkSync(filePath, function (err) {
         if (err) throw err;
         console.log(filePath + ' deleted!');
       });
+
+      const endTime = new Date().getTime();
+      encodeDuration = (endTime - startTime) / 1000;
+      console.log(
+        'Start at ' +
+          startTime +
+          ' and finished at ' +
+          endTime +
+          ', took ' +
+          encodeDuration +
+          ' seconds to encode a ' +
+          videoDuration +
+          ' seconds video'
+      );
+      console.log(encodeDuration);
+
+      videoStatus.status = 'ready';
+      videoStatus.videoDuration = videoDuration;
+      videoStatus.encodeDuration = encodeDuration;
+      await videoStatus.save();
     })
     .run();
 };
