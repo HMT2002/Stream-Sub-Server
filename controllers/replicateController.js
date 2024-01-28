@@ -13,6 +13,7 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
+const { CONSTANTS } = require('../constants/constants');
 
 async function concater(arrayChunkName, destination, filename, ext) {
   arrayChunkName.forEach((chunkName) => {
@@ -220,7 +221,7 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
     return;
   }
 
-  const baseUrl = url + port + '/api/v1/check/file/' + filename;
+  const baseUrl = url + port + CONSTANTS.SUB_SERVER_CHECK_API + '/file/' + filename;
   console.log(baseUrl);
   const { data: check } = await axios.get(baseUrl);
   console.log(check);
@@ -251,15 +252,15 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
 
     const { data: send } = await axios({
       method: 'post',
-      url: url + port + '/api/v1/replicate/receive',
+      url: url + port + CONSTANTS.SUB_SERVER_REPLICATE_API + '/receive',
       data: form,
-      headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
+      headers: { ...form.getHeaders(), chunkname: chunkName + chunkIndex, ext: filename.split('.')[1] },
     });
     console.log(send);
-    if (send.message == 'enough for concate') {
+    if (send.message == CONSTANTS.ENOUGH_FOR_CONCATE_MESSAGE) {
       const { data: concate } = await axios({
         method: 'post',
-        url: url + port + '/api/v1/replicate/concate',
+        url: url + port + CONSTANTS.SUB_SERVER_REPLICATE_API + '/concate',
         data: {
           arraychunkname: arrayChunkName,
           filename: filename,
@@ -267,38 +268,6 @@ exports.SendFileToOtherNode = catchAsync(async (req, res, next) => {
       });
       console.log(concate);
     }
-
-    // axios({
-    //   method: 'post',
-    //   url: url + port + '/api/v1/replicate/receive',
-    //   data: form,
-    //   headers: { ...form.getHeaders(), chunkname: chunkName + '_' + chunkIndex, ext: filename.split('.')[1] },
-    // })
-    //   .then(function (response) {
-    //     console.log(response.data);
-    //     const data = response.data;
-    //     if (data.message == 'enough for concate') {
-    //       setTimeout(() => {
-    //         axios({
-    //           method: 'post',
-    //           url: url + port + '/api/v1/replicate/concate',
-    //           data: {
-    //             arraychunkname: arrayChunkName,
-    //             filename: filename,
-    //           },
-    //         })
-    //           .then(function (response) {
-    //             console.log(response.data);
-    //           })
-    //           .catch(function (error) {
-    //             console.log(error);
-    //           });
-    //       }, 5000);
-    //     }
-    //   })
-    //   .catch(function (error) {
-    //     console.log(error);
-    //   });
   }
   res.status(200).json({
     message: 'File found',
@@ -350,12 +319,12 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
   if (flag) {
     console.log('enough');
     res.status(201).json({
-      message: 'enough for concate',
+      message: CONSTANTS.ENOUGH_FOR_CONCATE_MESSAGE,
     });
   } else {
     console.log('not enough');
     res.status(201).json({
-      message: 'success upload chunk, not enough for concate',
+      message: CONSTANTS.NOT_ENOUGH_FOR_CONCATE_MESSAGE,
     });
   }
 });
@@ -447,7 +416,7 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
   const url = req.body.url || 'localhost';
   const port = req.body.port || '';
 
-  const baseUrl = 'http://' + url + port + '/api/v1/check/file/' + filename;
+  const baseUrl = 'http://' + url + port + CONSTANTS.SUB_SERVER_CHECK_API + '/file/' + filename;
   console.log(baseUrl);
   const { data: check } = await axios.get(baseUrl);
   console.log(check);
@@ -480,7 +449,7 @@ exports.SendFolderFileToOtherNode = catchAsync(async (req, res, next) => {
     form.append('myFolderFile', readStream);
     const { data } = await axios({
       method: 'post',
-      url: 'http://' + url + port + '/api/v1/replicate/receive-folder',
+      url: 'http://' + url + port + CONSTANTS.SUB_SERVER_REPLICATE_API + '/receive-folder',
       data: form,
       headers: { ...form.getHeaders(), filename: fileList[i], folder: filename },
     });
@@ -507,7 +476,7 @@ exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => 
   const url = req.body.url || 'localhost';
   const port = req.body.port || '';
 
-  const baseUrl = 'http://' + url + port + '/api/v1/check/file/' + filename;
+  const baseUrl = 'http://' + url + port + CONSTANTS.SUB_SERVER_CHECK_API + '/file/' + filename;
   console.log(baseUrl);
   const { data: check } = await axios.get(baseUrl);
   console.log(check);
@@ -534,7 +503,7 @@ exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => 
   form.append('myIndividualFile', readStream);
   const { data } = await axios({
     method: 'post',
-    url: 'http://' + url + port + '/api/v1/replicate/receive-file',
+    url: 'http://' + url + port + CONSTANTS.SUB_SERVER_REPLICATE_API + '/receive-file',
     data: form,
     headers: { ...form.getHeaders(), filename: filename },
   });
@@ -549,7 +518,7 @@ exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => 
 exports.ReceiveIndividualFileFromOtherNode = catchAsync(async (req, res, next) => {
   let destination = req.file.destination;
   res.status(200).json({
-    message: 'success receive individual files',
+    message: CONSTANTS.SUCCESS_RECEIVE_INDIVIDUAL_FILE,
     destination,
   });
 });

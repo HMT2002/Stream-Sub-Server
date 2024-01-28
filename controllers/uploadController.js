@@ -14,6 +14,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
 const { setTimeout } = require('timers/promises');
+const { CONSTANTS } = require('../constants/constants');
 
 async function concater(arrayChunkName, destination, filename, ext) {
   arrayChunkName.forEach((chunkName) => {
@@ -81,11 +82,11 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
     encodeAPI.concaterServer(arrayChunkName, destination, originalname);
     encodeAPI.encodeIntoDashVer2(destination, originalname, statusID);
     res.status(201).json({
-      message: 'concated and converted!',
+      message: CONSTANTS.SUCCESS_CONCATE_AND_CONVERTED_MESSAGE,
     });
   } else {
     res.status(201).json({
-      message: 'success upload chunk, not enough for concate',
+      message: CONSTANTS.NOT_ENOUGH_FOR_CONCATE_MESSAGE,
     });
   }
 });
@@ -97,7 +98,7 @@ exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => 
   const url = req.body.url || 'localhost';
   const port = req.body.port || '';
 
-  const baseUrl = 'http://' + url + port + '/api/v1/check/file/' + filename;
+  const baseUrl = 'http://' + url + port + CONSTANTS.SUB_SERVER_CHECK_API + '/file/' + filename;
   console.log(baseUrl);
   const { data: check } = await axios.get(baseUrl);
   console.log(check);
@@ -124,7 +125,7 @@ exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => 
   form.append('myIndividualFile', readStream);
   const { data } = await axios({
     method: 'post',
-    url: 'http://' + url + port + '/api/v1/replicate/receive-file',
+    url: 'http://' + url + port + CONSTANTS.SUB_SERVER_REPLICATE_API + '/receive-file',
     data: form,
     headers: { ...form.getHeaders(), filename: filename },
   });
@@ -139,7 +140,7 @@ exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => 
 exports.ReceiveIndividualFileFromOtherNode = catchAsync(async (req, res, next) => {
   let destination = req.file.destination;
   res.status(200).json({
-    message: 'success receive individual files',
+    message: CONSTANTS.SUCCESS_RECEIVE_INDIVIDUAL_FILE,
     destination,
   });
 });

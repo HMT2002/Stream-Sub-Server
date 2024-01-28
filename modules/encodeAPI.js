@@ -140,6 +140,33 @@ const executeFfmpeg = (args) => {
   return command;
 };
 
+const injectpng = (filename, callback) => {
+  return new Promise((resolve, reject) => {
+    fs.readFile(filename, (err, data) => {
+      if (err) {
+        reject(err);
+      }
+      fs.readFile('base.png', (err, image_buffer) => {
+        if (err) {
+          reject(err);
+        }
+        const new_file = filename.replace('.ts', '.png');
+        fs.writeFile(new_file, Buffer.from(Buffer.concat([image_buffer, data]), 'binary'), (err, info) => {
+          if (err) {
+            reject(err);
+          }
+          fs.unlink(filename, (err, _) => {
+            if (err) {
+              reject(err);
+            }
+            return resolve(new_file);
+          });
+        });
+      });
+    });
+  });
+};
+
 const encodeIntoDashVer2 = async (destination, originalname, statusID) => {
   console.log({ destination, originalname });
   const filePath = destination + originalname;
@@ -174,6 +201,13 @@ const encodeIntoDashVer2 = async (destination, originalname, statusID) => {
     filePath +
     ' -map 0:v -map 0:a -preset ultrafast -crf 28 -c:s srt -sn -c:v libx264 -c:a aac -vf format=yuv420p -b:v:0 300k -s:v:0 720x480 -b:v:1 700k -s:v:1 1080x720 -b:v:2 1300k -s:v:2 1920x1080 -bf 1 -keyint_min 120 -g 120 -sc_threshold 0 -b_strategy 0 -ar:a:1 22050 -use_timeline 1 -single_file 0 -use_template 1 -seg_duration 10 -init_seg_name init_$RepresentationID$.m4s -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s -f dash ' +
     outputResult;
+
+  let command2 =
+    '-re -i ' +
+    filePath +
+    ' -map 0:v -map 0:a -preset ultrafast -crf 28 -c:s srt -sn -vf "scale=360:480" -c:v libx264 -b:v 1M -c:a aac -ar 44100 -f mp4 -y 360x480.mp4 -vf "scale=720:1280" -c:v libx264 -b:v 2M -c:a aac -ar 44100 -f mp4 -y 720x1280.mp4 -vf "scale=1920:1080" -c:v libx264 -b:v 4M -c:a aac -ar 44100 -f mp4 -y 1920x1080.mp4 -f dash -map 0:v -map 0:a -c copy -y ' +
+    outputResult;
+
   fluentFfmpeg.ffprobe(filePath, function (error, metadata) {
     if (error) {
       console.log(error);
