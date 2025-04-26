@@ -1,15 +1,20 @@
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const { DOMParser, XMLSerializer } = require('@xmldom/xmldom');
 const helperAPI = require('../modules/helperAPI');
 const firebaseAPI = require('../modules/firebaseAPI');
 
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
+const blacklist = require('../globals/blacklist');
 
 const { exec, execFileSync, spawn } = require('child_process');
 
 const fluentFfmpeg = require('fluent-ffmpeg');
+const DASHSessionEnd = require('../models/mongo/DASHSessionEnd');
+const { decode } = require('punycode');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);
 
@@ -1090,3 +1095,143 @@ exports.UploadNewFileLargeGetVideoThumbnail = catchAsync(async (req, res, next) 
 //     })
 //     .run();
 // });
+
+//eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZWNyZXQiOiIxMjM0NTY3ODkwIiwidXJsIjoidmlkZW9zL3FCc0xtMDZEYXNoIn0.LGV05FLUhTh4etkEa10MLki-02dC4MW2Gd4FaTbt438
+exports.MPDTokenHandler = catchAsync(async (req, res, next) => {
+  console.log('videoController.MPDTokenHandler -> ');
+  console.log(req.params);
+  let JWTPacket = req.params.token;
+  let requestURL = '';
+  let decoded = null;
+  let isMPDLegit = true;
+  try {
+    decoded = helperAPI.DecodeToken(JWTPacket);
+    isMPDLegit = await checkJWTToken(decoded);
+  } catch (e) {
+    helperAPI.EnhaceConsoleLogType(e, 'ERR');
+  } finally {
+    if (decoded === null || !isMPDLegit) {
+      helperAPI.EnhaceConsoleLogType('invalid request!', 'NOTI');
+      res.end();
+      return;
+    }
+    requestURL = decoded.url;
+  }
+  if (fs.existsSync('./' + requestURL)) {
+    console.log('mpd token is exist');
+    fs.readFile(requestURL + '/init.mpd', 'utf8', (err, data) => {
+      if (err) {
+        helperAPI.EnhaceConsoleLogType('MPD file not found!', 'NOTI');
+        return res.status(404).send('MPD file not found');
+      }
+
+      // Parse the MPD XML
+      const parser = new DOMParser();
+      const serializer = new XMLSerializer();
+      const xmlDoc = parser.parseFromString(data, 'text/xml');
+
+      // Find all segment URLs (SegmentTemplate elements with media attributes)
+      const segmentTemplates = xmlDoc.getElementsByTagName('SegmentTemplate');
+
+      for (let i = 0; i < segmentTemplates.length; i++) {
+        const segmentTemplate = segmentTemplates[i];
+        if (segmentTemplate.hasAttribute('media')) {
+          // Get the current media attribute
+          const mediaPattern = segmentTemplate.getAttribute('media');
+
+          // Modify to include the token
+          // The path needs to be structured to include the token in your routing
+          segmentTemplate.setAttribute('media', JWTPacket + `/${mediaPattern}`);
+        }
+
+        // Do the same for initialization segments if present
+        if (segmentTemplate.hasAttribute('initialization')) {
+          const initPattern = segmentTemplate.getAttribute('initialization');
+          segmentTemplate.setAttribute('initialization', JWTPacket + `/${initPattern}`);
+        }
+      }
+
+      // Serialize back to XML
+      const modifiedMPD = serializer.serializeToString(xmlDoc);
+
+      var stream = fs.createReadStream('./' + requestURL);
+      stream = modifiedMPD;
+      // res.writeHead(206);
+      // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
+      res.setHeader('Content-Type', 'application/dash+xml');
+      res.statusCode = 200;
+      // stream.pipe(res);
+      res.send(modifiedMPD);
+    });
+  } else {
+    console.log('mpd token is not exist');
+    res.end();
+    return;
+  }
+});
+exports.M4STokenHandler = catchAsync(async (req, res, next) => {
+  console.log('videoController.M4STokenHandler -> ');
+  console.log(req.params);
+
+  let segment = req.params.segment;
+  let JWTPacket = req.params.token;
+  let requestURL = '';
+  let decoded = null;
+  let isM4SLegit = true;
+  try {
+    decoded = helperAPI.DecodeToken(JWTPacket);
+    //kiểm tra token mỗi 5s
+    // if (flagCheckM4SToken) {
+    //   flagCheckM4SToken = false;
+    //   isM4SLegit = await checkJWTToken(decoded);
+    // }
+    isM4SLegit = await checkJWTToken(decoded);
+  } catch (e) {
+    helperAPI.EnhaceConsoleLogType(e, 'ERR');
+    decoded = null;
+    isM4SLegit = false;
+  } finally {
+    if (decoded === null || !isM4SLegit) {
+      // flagCheckM4SToken = false;
+      helperAPI.EnhaceConsoleLogType('Session is invalid, shutting down!!', 'ERR');
+      res.end();
+      return;
+    }
+    requestURL = decoded.url;
+  }
+
+  if (fs.existsSync('./' + requestURL + '/' + segment + '.m4s')) {
+    console.log('m4s token is exist');
+    const stream = fs.createReadStream('./' + requestURL + '/' + segment + '.m4s');
+    // res.writeHead(206);
+    // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
+    res.setHeader('Content-Type', 'video/iso.segment');
+    res.statusCode = 200;
+    stream.pipe(res);
+  } else {
+    console.log('m4s token is not exist');
+    res.end();
+    return;
+  }
+});
+const checkJWTToken = async (decoded) => {
+  helperAPI.EnhaceConsoleLogType('checkJWTToken', 'NOTI');
+  if (decoded === null) {
+    return false;
+  }
+  console.log(decoded);
+  var sessionID = decoded.sessionID;
+  console.log(blacklist.blacklist);
+  let indexOfSessionID = blacklist.blacklist.findIndex((e) => e.sessionID === sessionID);
+  console.log(indexOfSessionID);
+  if (indexOfSessionID > -1) {
+    return false;
+  }
+
+  return true;
+};
+let flagCheckM4SToken = true;
+// setInterval(function () {
+//   // helperAPI.EnhaceConsoleLogType('interval VideoController', 'NOTI');
+//   flagCheckM4SToken = true;
+// }, 8000);

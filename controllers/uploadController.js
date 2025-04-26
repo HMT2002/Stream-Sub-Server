@@ -35,7 +35,7 @@ async function concaterServer(arrayChunkName, destination, originalname) {
   });
 }
 exports.CheckFileBeforeReceive = catchAsync(async (req, res, next) => {
-  console.log('check file before receive');
+  console.log('uploadController.CheckFileBeforeReceive -> ');
   const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
@@ -65,7 +65,7 @@ exports.CheckFolderBeforeReceive = catchAsync(async (req, res, next) => {
 });
 
 exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
-  console.log('received');
+  console.log('uploadController.ReceiveFileFromOtherNode -> ');
   let arrayChunkName = req.body.arraychunkname;
   let destination = req.file.destination;
   let flag = true;
@@ -80,7 +80,7 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
     const originalname = req.body.filename;
     const statusID = req.body.statusID;
     encodeAPI.concaterServer(arrayChunkName, destination, originalname);
-    encodeAPI.encodeIntoDashVer2(destination, originalname, statusID);
+    encodeAPI.encodeIntoDashVer4(destination, originalname, statusID);
     res.status(201).json({
       message: CONSTANTS.SUCCESS_CONCATE_AND_CONVERTED_MESSAGE,
     });
@@ -89,6 +89,16 @@ exports.ReceiveFileFromOtherNode = catchAsync(async (req, res, next) => {
       message: CONSTANTS.NOT_ENOUGH_FOR_CONCATE_MESSAGE,
     });
   }
+});
+
+exports.TestEncodeCommand = catchAsync(async (req, res, next) => {
+  console.log('uploadController.TestEncodeCommand -> ');
+  let videoname = req.body.videoname;
+
+  encodeAPI.encodeIntoDash_test(videoname);
+  res.status(201).json({
+    message: 'run command!',
+  });
 });
 
 exports.SendIndIndividualFileToOtherNode = catchAsync(async (req, res, next) => {
