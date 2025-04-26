@@ -22,7 +22,23 @@ router
     uploadIndividualFile,
     uploadController.ReceiveIndividualFileFromOtherNode
   );
-router
-  .route('/')
-  .post(uploadController.CheckFileBeforeReceive, uploadMultipartFileChunk, uploadController.ReceiveFileFromOtherNode);
+
+router.route('/test_command').post((req, res, next) => {
+  console.log('Request URL:', req.originalUrl + ' - > uploadRouter -> ');
+  next();
+}, uploadController.TestEncodeCommand);
+
+router.route('/').post(
+  (req, res, next) => {
+    console.log('Request URL:', req.originalUrl + ' - > uploadRouter -> ');
+    next();
+  },
+  uploadController.CheckFileBeforeReceive,
+  (req, res, next) => {
+    console.log('uploadMultipartFileChunk -> ');
+    next();
+  },
+  uploadMultipartFileChunk,
+  uploadController.ReceiveFileFromOtherNode
+);
 module.exports = router;

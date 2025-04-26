@@ -10,3 +10,10 @@ node_modules
 *.m4s
 *.mpd
 *.tmp
+videos/ffmpeg.exe
+videos/rtpMp4IP.bat
+videos/rtmpMp4IP.bat
+ffmpeg.exe
+*.png
+*.env
+config.env

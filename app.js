@@ -21,6 +21,7 @@ const deleteRoute = require('./routes/deleteRoute');
 const checkRoute = require('./routes/checkRoute');
 const testRoute = require('./routes/testRoute');
 const defaultRouter = require('./routes/defaultRoute');
+const streamingRoute = require('./routes/streamingRoute');
 
 // const client_posts = JSON.parse(fs.readFileSync('./json-resources/client_posts.json'));
 
@@ -64,6 +65,33 @@ app.get('/is-this-alive', defaultController.CheckIfThisServerIsFckingAlive);
 
 app.use('/api/v1/check', checkRoute);
 
+// #region Handling mpd and m4s token request || phải để này trên cùng để tăng ưu tiên xử lý request duôi *.mpd hoặc *.m4s
+app.use(cors()).get(
+  '/dash-token/:token*.mpd',
+  (req, res, next) => {
+    console.log('Request URL:', req.originalUrl + ' -> ');
+    next();
+  },
+  (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  },
+  videoController.MPDTokenHandler
+);
+app.use(cors()).get(
+  '/dash-token/:token/:segment*.m4s',
+  (req, res, next) => {
+    console.log('Request URL:', req.originalUrl + ' -> ');
+    next();
+  },
+  (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  },
+  videoController.M4STokenHandler
+);
+// #endregion
+
 // #region Handling extra requests, such as subtitle requests
 app.get('/*.vtt', videoController.VTTHandler);
 app.get('/*.ass', videoController.ASSHandler);
@@ -71,6 +99,7 @@ app.get('/*.srt', videoController.SRTHandler);
 app.get('/*.mp4', videoController.MP4MPDHandler);
 app.get('/*.mpd', videoController.MPDHandler);
 app.get('/*.m4s', videoController.M4SHandler);
+
 // app.get('/*.m3u8', videoController.M3u8Handler);
 // app.get('/*.ts', videoController.TsHandler);
 
@@ -85,6 +114,7 @@ app.use('/api/v1/video', videoRoute);
 app.use('/api/v1/upload', uploadRoute);
 app.use('/api/v1/replicate', replicateRoute);
 app.use('/api/v1/delete', deleteRoute);
+app.use('/api/v1/streaming', streamingRoute);
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));

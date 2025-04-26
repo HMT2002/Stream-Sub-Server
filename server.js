@@ -12,12 +12,36 @@ dbVideoSharing.connect();
 
 const hls = require('hls-server');
 const fs = require('fs');
+const os = require('os');
+const readline = require('readline');
+
+let total_mem = os.totalmem();
+const Log_CPU = (isLogOsCPU) => {
+  let free_mem = os.freemem();
+
+  let free_percentage = (free_mem / total_mem) * 100;
+  if (isLogOsCPU) {
+    console.log(os.cpus());
+  }
+  // console.log(`Total memory = ${total_mem} Free memory = ${free_mem} Free memory percentage = ${free_percentage}`);
+  // readline.clearLine(process.stdout, 0);
+  // readline.cursorTo(process.stdout, 0);
+  // process.stdout.write(
+  //   `Total memory = ${total_mem} Free memory = ${free_mem} Free memory percentage = ${free_percentage} \r`
+  // );
+  // blessed_status(`Total memory = ${total_mem} Free memory = ${free_mem} Free memory percentage = ${free_percentage}`);
+  // blessed_log(`Total memory = ${total_mem} Free memory = ${free_mem} Free memory percentage = ${free_percentage}`);
+};
 
 //console.log(process.env);
 //START SERVER
 const port = Number(process.env.PORT) + Number(process.env.SERVERINDEX) * Number(process.env.SERVERREP) || 9100;
 const server = app.listen(port, () => {
   console.log('App listening to ' + port);
+
+  setInterval(function () {
+    Log_CPU(false);
+  }, 1000);
 });
 server.timeout = 15000; //15s
 
