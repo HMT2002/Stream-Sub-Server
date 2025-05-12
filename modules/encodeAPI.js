@@ -79,7 +79,7 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         filePath +
         ' -c:v hevc_nvenc' +
         ' -c:a aac -b:a 128k' +
-        ' -preset veryfast' +
+        ' -preset 4' +
         ' -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p -preset p4 -rc vbr ' +
         ' -map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:v:0 -map 0:v:0' +
         ' -b:v:0 300k -s:v:0 720x480 -profile:v:0 1' +
@@ -733,10 +733,12 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
     console.log(encodeDuration);
     console.log(commandCombine);
 
-    videoStatus.status = 'ready';
-    videoStatus.videoDuration = videoDuration;
-    videoStatus.encodeDuration = encodeDuration;
-    await videoStatus.save();
+    if (videoStatus !== null) {
+      videoStatus.status = 'ready';
+      videoStatus.videoDuration = videoDuration;
+      videoStatus.encodeDuration = encodeDuration;
+      await videoStatus.save();
+    }
   });
 };
 
