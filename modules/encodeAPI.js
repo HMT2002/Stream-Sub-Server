@@ -651,7 +651,7 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
   console.log({ destination, originalname });
   const filePath = destination + originalname;
   const filenameWithoutExt = originalname.split('.')[0];
-  const outputFolder = destination + filenameWithoutExt + 'Dash';
+  const outputFolder = destination + filenameWithoutExt;
   const outputResult = outputFolder + '/init.mpd';
   const videoStatus = await VideoStatus.findById(statusID);
   fs.access(outputFolder, (error) => {
@@ -748,7 +748,7 @@ const encodeIntoDash_test = async (videoname) => {
   console.log({ videoname });
   const filePath = videoname;
   const filenameWithoutExt = videoname.split('.')[0];
-  const outputFolder = filenameWithoutExt + 'Dash';
+  const outputFolder = filenameWithoutExt;
   const outputResult = outputFolder + '/init.mpd';
   fs.access(outputFolder, (error) => {
     if (error) {
