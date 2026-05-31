@@ -1184,7 +1184,14 @@ exports.M4STokenHandler = catchAsync(async (req, res, next) => {
     //   flagCheckM4SToken = false;
     //   isM4SLegit = await checkJWTToken(decoded);
     // }
-    isM4SLegit = await checkJWTToken(decoded);
+    // Cấu hình: comment/uncomment dòng nào muốn bật
+    const activeChecks = [
+      checkJWTToken(decoded), // điều kiện 1
+      checkHeaderSecret(req), // điều kiện 2
+    ];
+    // Chọn 1 trong 2 mode:
+    isM4SLegit = (await Promise.all(activeChecks)).every(Boolean); // AND: tất cả phải pass
+    // isM4SLegit = (await Promise.all(activeChecks)).some(Boolean); // OR: 1 trong số pass là đủ
   } catch (e) {
     helperAPI.EnhaceConsoleLogType(e, 'ERR');
     decoded = null;
@@ -1224,6 +1231,22 @@ const checkJWTToken = async (decoded) => {
   let indexOfSessionID = blacklist.blacklist.findIndex((e) => e.sessionID === sessionID);
   console.log(indexOfSessionID);
   if (indexOfSessionID > -1) {
+    return false;
+  }
+
+  return true;
+};
+const checkHeaderSecret = async (req) => {
+  helperAPI.EnhaceConsoleLogType('checkHeaderSecret', 'NOTI');
+
+  const sessionId = req.headers['x-player-session'];
+  const playerToken = req.headers['x-player-token'];
+  // console.log('Headers:', req.headers);
+
+  if (!sessionId || !playerToken) {
+    return false;
+  }
+  if (playerToken !== 'abcdef123456' || sessionId !== '1234567890') {
     return false;
   }
 

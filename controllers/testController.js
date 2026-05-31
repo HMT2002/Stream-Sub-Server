@@ -702,3 +702,18 @@ exports.VideoPlayOPTIONS = catchAsync(async (req, res, next) => {
     })
     .run();
 });
+
+exports.HandlingProgressing = catchAsync(async (req, res, next) => {
+  let count = 0;
+  let myInterval = setInterval(() => {
+    if (count >= 10) {
+      clearInterval(myInterval);
+      count = 0;
+      res.end();
+    } else {
+      count++;
+      console.log('Tick is ' + count);
+      res.write('Tick is ' + count);
+    }
+  }, 500);
+});
