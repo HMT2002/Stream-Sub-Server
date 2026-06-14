@@ -101,6 +101,7 @@ app.get('/*.srt', videoController.SRTHandler);
 app.get('/*.mp4', videoController.MP4MPDHandler);
 app.get('/*.mpd', videoController.MPDHandler);
 app.get('/*.m4s', videoController.M4SHandler);
+app.get('/*.png', videoController.PNGHandler);
 
 // app.get('/*.m3u8', videoController.M3u8Handler);
 // app.get('/*.ts', videoController.TsHandler);

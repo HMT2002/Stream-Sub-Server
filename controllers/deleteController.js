@@ -27,12 +27,14 @@ exports.ReceiveDeleteRequest = catchAsync(async (req, res, next) => {
 });
 
 exports.ReceiveDeleteFolderRequest = catchAsync(async (req, res, next) => {
-  const filename = req.body.filename || '7ZXNZYOHls';
+  console.log('dealing ReceiveDeleteFolderRequest');
+  console.log(req.body);
+  const filename = req.body.filename || 'temp';
   const videoFolderPath = 'videos/' + filename;
   const url = req.body.url || 'http://localhost';
   const port = req.body.port || '';
   if (!fs.existsSync(videoFolderPath)) {
-    console.log('not found path');
+    console.log('not found path ' + videoFolderPath);
     res.status(201).json({
       message: 'path not found on ' + url + port + ' path: ' + videoFolderPath,
     });

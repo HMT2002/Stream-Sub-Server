@@ -68,7 +68,6 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         outputResult;
       break;
     case 1:
-    default:
       encodeCmd =
         'ffmpeg -ss 10 -i ' +
         filePath +
@@ -152,6 +151,85 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         ' -single_file 0' +
         ' -use_template 1' +
         ' -seg_duration 10' +
+        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
+        ' -init_seg_name init_$RepresentationID$.m4s' +
+        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
+        ' -f dash ' +
+        outputResult;
+      break;
+    case 4:
+    default:
+      encodeCmd =
+        'ffmpeg -ss 10 -i ' +
+        filePath +
+        ' -qscale:v 2 -frames:v 1 ' +
+        outputFolder +
+        '/thumbnail.png ' +
+        ' | ' +
+        'ffmpeg -hwaccel cuda -hwaccel_output_format cuda' +
+        ' -i ' +
+        filePath +
+        ' -filter_complex "[0:v]split=3[v0][v1][v2];[v0]scale_cuda=720:480[s0];[v1]scale_cuda=1080:720[s1];[v2]scale_cuda=1920:1080[s2]"' +
+        ' -map "[s0]" -map "[s1]" -map "[s2]" -map 0:a:0' +
+        ' -c:v h264_nvenc' +
+        ' -c:a aac -b:a 128k' +
+        ' -rc vbr -cq 21' +
+        ' -preset p6' +
+        ' -bf 3 -b_ref_mode middle' +
+        ' -spatial-aq 1 -aq-strength 8' +
+        ' -temporal-aq 1' +
+        ' -rc-lookahead 32' +
+        ' -multipass qres' +
+        ' -g 120 -keyint_min 120' +
+        ' -force_key_frames "expr:gte(t,n_forced*2)"' +
+        ' -b:v:0 450k  -maxrate:v:0 675k  -bufsize:v:0 900k  -profile:v:0 main' +
+        ' -b:v:1 1000k -maxrate:v:1 1500k -bufsize:v:1 2000k -profile:v:1 main' +
+        ' -b:v:2 1900k -maxrate:v:2 2850k -bufsize:v:2 3800k -profile:v:2 high' +
+        ' -use_timeline 1' +
+        ' -use_template 1' +
+        ' -single_file 0' +
+        ' -seg_duration 4' +
+        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
+        ' -init_seg_name init_$RepresentationID$.m4s' +
+        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
+        ' -f dash ' +
+        outputResult;
+      break;
+    case 5:
+      encodeCmd =
+        'ffmpeg -ss 10 -i ' +
+        filePath +
+        ' -qscale:v 2 -frames:v 1 ' +
+        outputFolder +
+        '/thumbnail.png ' +
+        ' | ' +
+        'ffmpeg' +
+        ' -i ' +
+        filePath +
+        ' -filter_complex "[0:v]split=3[v0][v1][v2];' +
+        '[v0]scale=720:480[s0];' +
+        '[v1]scale=1280:720[s1]"' +
+        ' -map "[s0]" -map "[s1]" -map "[v2]" -map 0:a:0' +
+        ' -c:v hevc_nvenc' +
+        ' -c:a aac -b:a 128k' +
+        ' -preset p6 -tune hq' +
+        ' -tier high' +
+        ' -rc vbr' +
+        ' -rc-lookahead 32' +
+        ' -multipass qres' +
+        ' -spatial-aq 1 -temporal-aq 1 -aq-strength 8' +
+        ' -bf 3 -b_ref_mode middle' +
+        ' -pix_fmt yuv420p' +
+        ' -profile:v 0' +
+        ' -g 120 -keyint_min 120' +
+        ' -force_key_frames "expr:gte(t,n_forced*2)"' +
+        ' -b:v:0 450k  -maxrate:v:0 675k  -bufsize:v:0 900k' +
+        ' -b:v:1 1000k -maxrate:v:1 1500k -bufsize:v:1 2000k' +
+        ' -b:v:2 1900k -maxrate:v:2 2850k -bufsize:v:2 3800k' +
+        ' -use_timeline 1' +
+        ' -use_template 1' +
+        ' -single_file 0' +
+        ' -seg_duration 4' +
         ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
         ' -init_seg_name init_$RepresentationID$.m4s' +
         ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
@@ -733,7 +811,7 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
   // Handle completion
   process_combine.on('close', async (code) => {
     if (code === 0) {
-      console.log('Video conversion completed successfully');
+      // console.log('Video conversion completed successfully');
     } else {
       const error = new Error(`FFmpeg process_combine exited with code ${code}`);
       console.error(error.message);
@@ -756,10 +834,10 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
         encodeDuration +
         ' seconds to encode a ' +
         videoDuration +
-        ' seconds video'
+        ' seconds video' +
+        ' with command: ' +
+        commandCombine
     );
-    console.log(encodeDuration);
-    console.log(commandCombine);
 
     if (videoStatus !== null) {
       videoStatus.status = 'ready';

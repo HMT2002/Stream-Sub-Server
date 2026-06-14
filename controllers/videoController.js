@@ -292,6 +292,22 @@ exports.M4SHandler = catchAsync(async (req, res, next) => {
     return;
   }
 });
+exports.PNGHandler = catchAsync(async (req, res, next) => {
+  console.log('png is here');
+  console.log(req.url);
+
+  if (fs.existsSync('./' + req.url)) {
+    console.log('png is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    res.setHeader('Content-Type', 'image/png');
+    res.statusCode = 200;
+    stream.pipe(res);
+  } else {
+    console.log('png is not exist');
+    res.end();
+    return;
+  }
+});
 
 exports.M3u8Handler = catchAsync(async (req, res, next) => {
   console.log('m3u8 is here');
@@ -1170,7 +1186,7 @@ exports.MPDTokenHandler = catchAsync(async (req, res, next) => {
 });
 exports.M4STokenHandler = catchAsync(async (req, res, next) => {
   console.log('videoController.M4STokenHandler -> ');
-  console.log(req.params);
+  // console.log(req.params);
 
   let segment = req.params.segment;
   let JWTPacket = req.params.token;
@@ -1186,8 +1202,8 @@ exports.M4STokenHandler = catchAsync(async (req, res, next) => {
     // }
     // Cấu hình: comment/uncomment dòng nào muốn bật
     const activeChecks = [
-      checkJWTToken(decoded), // điều kiện 1
-      checkHeaderSecret(req), // điều kiện 2
+      // checkJWTToken(decoded), // điều kiện 1
+      // checkHeaderSecret(req), // điều kiện 2
     ];
     // Chọn 1 trong 2 mode:
     isM4SLegit = (await Promise.all(activeChecks)).every(Boolean); // AND: tất cả phải pass
