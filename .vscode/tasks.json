@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "subserver",
+      "type": "shell",
+      "command": "npm start",
+      "presentation": {
+        "panel": "shared",
+        "group": "dev",
+        "reveal": "always"
+      },
+      "isBackground": true
+    }
+  ]
+}
