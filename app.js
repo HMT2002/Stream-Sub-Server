@@ -79,22 +79,43 @@ app.use(cors()).get(
   },
   videoController.MPDTokenHandler
 );
-app.use(cors()).get(
-  '/dash-token/:token/:segment*.m4s',
-  (req, res, next) => {
-    console.log('Request URL:', req.originalUrl + ' -> ');
-    next();
-  },
-  (req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    next();
-  },
-  videoController.M4STokenHandler
-);
+// app.use(cors()).get(
+//   '/dash-token/:token/:segment*.m4s',
+//   (req, res, next) => {
+//     console.log('Request URL:', req.originalUrl + ' -> ');
+//     next();
+//   },
+//   (req, res, next) => {
+//     res.header('Access-Control-Allow-Origin', '*');
+//     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+//     next();
+//   },
+//   videoController.M4STokenHandler
+// );
 // #endregion
 
 // #region Handling extra requests, such as subtitle requests
+
+//v1
+// app.get('/videos/v1/*.vtt', videoController.VTTHandler);
+// app.get('/videos/v1/*.ass', videoController.ASSHandler);
+// app.get('/videos/v1/*.srt', videoController.SRTHandler);
+// app.get('/videos/v1/*.mp4', videoController.MP4MPDHandler);
+// app.get('/videos/v1/*.mpd', videoController.MPDHandlerVer1);
+// app.get('/videos/v1/*.m4s', videoController.M4SHandlerVer1);
+// app.get('/videos/v1/*.png', videoController.PNGHandler);
+// //
+
+// //v2
+// app.get('/videos/v2/*.vtt', videoController.VTTHandler);
+// app.get('/videos/v2/*.ass', videoController.ASSHandler);
+// app.get('/videos/v2/*.srt', videoController.SRTHandler);
+// app.get('/videos/v2/*.mp4', videoController.MP4MPDHandler);
+// app.get('/videos/v2/*.mpd', videoController.MPDHandler);
+// app.get('/videos/v2/*.m4s', videoController.M4SHandler);
+// app.get('/videos/v2/*.png', videoController.PNGHandler);
+// //
+
 app.get('/*.vtt', videoController.VTTHandler);
 app.get('/*.ass', videoController.ASSHandler);
 app.get('/*.srt', videoController.SRTHandler);

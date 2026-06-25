@@ -62,7 +62,7 @@ const storageIndividualFile = multer.diskStorage({
 });
 
 const multipartMaxSize = 35 * 1024 * 1024; //35mb
-const folderFileMaxSize = 30 * 1024 * 1024; //30mb
+const folderFileMaxSize = 100 * 1024 * 1024; //100mb
 const individualFileMaxSize = 10 * 1024 * 1024; //10mb
 
 const maxSize = 300 * 1024 * 1024; //300mb

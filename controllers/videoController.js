@@ -258,6 +258,71 @@ exports.MP4MPDHandler = catchAsync(async (req, res, next) => {
   }
 });
 
+exports.MPDHandlerVer1 = catchAsync(async (req, res, next) => {
+  console.log('videoController.MPDHandlerVer1 -> ');
+  console.log(req.url);
+  let requestURL = req.url.replace('/v1', '');
+  console.log('requestURL: ' + requestURL);
+  if (fs.existsSync('./' + requestURL)) {
+    console.log('mpd token is exist');
+    fs.readFile(requestURL + '/init.mpd', 'utf8', (err, data) => {
+      if (err) {
+        helperAPI.EnhaceConsoleLogType('MPD file not found!', 'NOTI');
+        return res.status(404).send('MPD file not found');
+      }
+
+      // Parse the MPD XML
+      const parser = new DOMParser();
+      const serializer = new XMLSerializer();
+      const xmlDoc = parser.parseFromString(data, 'text/xml');
+
+      // Find all mpd base urls (SegmentTemplate elements with media attributes)
+      const mpdTemplates = xmlDoc.getElementsByTagName('MPD');
+      const mpdTemplate = mpdTemplates[0];
+      for (let i = 0; i < 1; i++) {
+        const newBaseURLTag = xmlDoc.createElement('BaseURL');
+        newBaseURLTag.setAttribute('dvb:priority', i + 1);
+        newBaseURLTag.setAttribute('dvb:weight', 1);
+        const baseURLText = xmlDoc.createTextNode('http://localhost:9' + i + 1 + '00/videos/');
+        newBaseURLTag.appendChild(baseURLText);
+        mpdTemplate.appendChild(newBaseURLTag);
+      }
+
+      // Serialize back to XML
+      const modifiedMPD = serializer.serializeToString(xmlDoc);
+
+      var stream = fs.createReadStream('./' + requestURL);
+      stream = modifiedMPD;
+      // res.writeHead(206);
+      // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
+      res.setHeader('Content-Type', 'application/dash+xml');
+      res.statusCode = 200;
+      // stream.pipe(res);
+      res.send(modifiedMPD);
+    });
+  } else {
+    console.log('mpd ver 1 is not exist');
+    res.end();
+    return;
+  }
+});
+exports.M4SHandlerVer1 = catchAsync(async (req, res, next) => {
+  console.log('m4s ver 1 is here');
+  console.log(req.url);
+  if (fs.existsSync('./' + req.url)) {
+    console.log('m4s ver 1 is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    // res.writeHead(206);
+    res.setHeader('Content-Type', 'video/iso.segment');
+    res.statusCode = 200;
+    stream.pipe(res);
+  } else {
+    console.log('m4s ver 1 is not exist');
+    res.end();
+    return;
+  }
+});
+
 exports.MPDHandler = catchAsync(async (req, res, next) => {
   console.log('mpd is here');
   console.log(req.url);
@@ -1134,6 +1199,7 @@ exports.MPDTokenHandler = catchAsync(async (req, res, next) => {
   }
   if (fs.existsSync('./' + requestURL)) {
     console.log('mpd token is exist');
+    console.log('requestURL: ' + requestURL);
     fs.readFile(requestURL + '/init.mpd', 'utf8', (err, data) => {
       if (err) {
         helperAPI.EnhaceConsoleLogType('MPD file not found!', 'NOTI');
