@@ -262,7 +262,7 @@ exports.MPDHandlerVer1 = catchAsync(async (req, res, next) => {
   console.log('videoController.MPDHandlerVer1 -> ');
   console.log(req.url);
   let requestURL = req.url.replace('/v1', '');
-  console.log('requestURL: ' + requestURL);
+
   if (fs.existsSync('./' + requestURL)) {
     console.log('mpd token is exist');
     fs.readFile(requestURL + '/init.mpd', 'utf8', (err, data) => {
@@ -1199,7 +1199,6 @@ exports.MPDTokenHandler = catchAsync(async (req, res, next) => {
   }
   if (fs.existsSync('./' + requestURL)) {
     console.log('mpd token is exist');
-    console.log('requestURL: ' + requestURL);
     fs.readFile(requestURL + '/init.mpd', 'utf8', (err, data) => {
       if (err) {
         helperAPI.EnhaceConsoleLogType('MPD file not found!', 'NOTI');

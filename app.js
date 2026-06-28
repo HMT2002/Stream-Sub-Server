@@ -8,6 +8,8 @@ const videoController = require('./controllers/videoController');
 const testController = require('./controllers/testController');
 const defaultController = require('./controllers/defaultController');
 
+const heartbeatAPI = require('./modules/heartbeatAPI');
+
 const cors = require('cors');
 var path = require('path');
 const fs = require('fs');
@@ -62,8 +64,7 @@ app.use((req, res, next) => {
   next();
 });
 app.get('/is-this-alive', defaultController.CheckIfThisServerIsFckingAlive);
-
-app.use('/api/v1/check', checkRoute);
+app.use('/heartbeat', defaultController.heartbeatCheck);
 
 // #region Handling mpd and m4s token request || phải để này trên cùng để tăng ưu tiên xử lý request duôi *.mpd hoặc *.m4s
 app.use(cors()).get(
@@ -144,5 +145,10 @@ app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));
 });
 app.use(globalErrorHandler);
+
+//#region autoHeartbeat
+// khởi động — KHÔNG await, để nó chạy nền
+heartbeatAPI.heartbeatLoop();
+//#endregion
 
 module.exports = app;
