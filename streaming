@@ -20,28 +20,28 @@ location = /50x.html {
 root html;
 }
 }
-rtmp {
-server {
-listen 1935;
-application live {
-live on;
-dash on;
-dash_path /tmp/dash;
-dash_fragment 15s;
-}
-}
-}
+#rtmp {
+#server {
+#listen 1935;
+#application live {
+#live on;
+#dash on;
+#dash_path /tmp/dash;
+#dash_fragment 15s;
+#}
+#}
+#}
 
-http {
-server {
-listen 80;
-location /tv {
-root /tmp/dash;
-}
-}
+#http {
+#server {
+#listen 80;
+#location /tv {
+#root /tmp/dash;
+#}
+#}
 
-types {
-text/html html;
-application/dash+xml mpd;
-}
-}
+#types {
+#text/html html;
+#application/dash+xml mpd;
+#}
+#}
