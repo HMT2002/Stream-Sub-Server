@@ -80,19 +80,19 @@ app.use(cors()).get(
   },
   videoController.MPDTokenHandler
 );
-// app.use(cors()).get(
-//   '/dash-token/:token/:segment*.m4s',
-//   (req, res, next) => {
-//     console.log('Request URL:', req.originalUrl + ' -> ');
-//     next();
-//   },
-//   (req, res, next) => {
-//     res.header('Access-Control-Allow-Origin', '*');
-//     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-//     next();
-//   },
-//   videoController.M4STokenHandler
-// );
+app.use(cors()).get(
+  '/dash-token/:token/:segment*.m4s',
+  (req, res, next) => {
+    console.log('Request URL:', req.originalUrl + ' -> ');
+    next();
+  },
+  (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+  },
+  videoController.M4STokenHandler
+);
 // #endregion
 
 // #region Handling extra requests, such as subtitle requests
@@ -140,6 +140,7 @@ app.use('/api/v1/upload', uploadRoute);
 app.use('/api/v1/replicate', replicateRoute);
 app.use('/api/v1/delete', deleteRoute);
 app.use('/api/v1/streaming', streamingRoute);
+app.use('/api/v1/check', checkRoute);
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));

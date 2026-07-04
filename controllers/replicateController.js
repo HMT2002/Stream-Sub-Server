@@ -474,9 +474,9 @@ exports.sendVideoForReplicationV2 = catchAsync(async (req, res, next) => {
   const destinationServer = await Server.findById(serverId);
   const baseUrl =
     'http://' + destinationServer.URL + destinationServer.port + CONSTANTS.SUB_SERVER_CHECK_API + '/file/' + filename;
-  console.log(baseUrl);
+  console.log('baseUrl: ' + baseUrl);
   const { data: check } = await axios.get(baseUrl);
-  console.log(check);
+  console.log('check: ' + JSON.stringify(check));
   if (check.existed === true) {
     console.log('check not existed ' + check.existed + '|||| baseUrl');
 
