@@ -264,7 +264,7 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         ' -single_file 0' +
         ' -seg_duration 4' +
         ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
-        ' -init_seg_name init_$RepresentationID$.m4s' +
+        " -init_seg_name 'init_$RepresentationID$.m4s'" +
         " -media_seg_name 'chunk_$RepresentationID$_$Number%05d$.m4s'" +
         ' -f dash ' +
         outputResult;
