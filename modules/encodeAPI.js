@@ -251,7 +251,9 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         ' -map "[s0]" -map "[s1]" -map "[s2]" -map 0:a:0' +
         ' -c:v libx264 ' +
         ' -c:a aac -b:a 128k' +
-        ' -rc -cq 21' +
+        ' -crf 21' +
+        ' -pix_fmt yuv420p' +
+        ' -threads 0' +
         ' -preset veryfast' +
         ' -bf 3' +
         ' -g 120 -keyint_min 120' +
