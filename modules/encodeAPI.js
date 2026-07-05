@@ -251,7 +251,7 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         ' -map "[s0]" -map "[s1]" -map "[s2]" -map 0:a:0' +
         ' -c:v libx264 ' +
         ' -c:a aac -b:a 128k' +
-        ' -rc vbr -cq 21' +
+        ' -rc -cq 21' +
         ' -preset veryfast' +
         ' -bf 3' +
         ' -g 120 -keyint_min 120' +
@@ -265,7 +265,7 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         ' -seg_duration 4' +
         ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
         ' -init_seg_name init_$RepresentationID$.m4s' +
-        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
+        " -media_seg_name 'chunk_$RepresentationID$_$Number%05d$.m4s'" +
         ' -f dash ' +
         outputResult;
       break;
