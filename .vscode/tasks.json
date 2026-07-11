@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "subserver",
+      "label": "startall",
       "type": "shell",
       "command": "npm start",
       "presentation": {
