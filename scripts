@@ -6,7 +6,8 @@ curl -s https://deb.nodesource.com/setup_20.x | sudo bash
 sudo apt install nodejs -y
 node -v
 cd Stream-Sub-Server
-test -f config.env || { echo "THIẾU config.env — copy file này lên trước khi tiếp tục"; exit 1; }
+mv config.env_ config.env
+test -f config.env || { echo "THIẾU config.env — copy file này lên trước khi tiếp tục"; }
 sudo cp streaming /etc/nginx/sites-enabled/default
 sudo cp nginx.conf /etc/nginx/nginx.conf
 sudo nginx -t
@@ -15,6 +16,7 @@ sudo npm install pm2 -g
 sudo service nginx restart
 pm2 start server.js
 pm2 save
+pm2 logs server
 
 ==============================Đừng chạy mấy lệnh này=============================
                                     SJIS
