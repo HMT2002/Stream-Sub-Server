@@ -16,3 +16,4 @@ videos/rtmpMp4IP.bat
 ffmpeg.exe
 *.png
 config.env
+videos/*

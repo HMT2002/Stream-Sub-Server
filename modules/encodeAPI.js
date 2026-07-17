@@ -158,7 +158,6 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         outputResult;
       break;
     case 4:
-    default:
       encodeCmd =
         'ffmpeg -ss 10 -i ' +
         filePath +
@@ -270,6 +269,173 @@ const encodeCommand = (index, filePath, outputFolder, outputResult) => {
         " -media_seg_name 'chunk_$RepresentationID$_$Number%05d$.m4s'" +
         ' -f dash ' +
         outputResult;
+      break;
+    case 7:
+      // Universal aspect ratio + H.264 NVENC.
+      // Decode/scale bằng CPU để tương thích rộng, encode bằng NVIDIA GPU.
+      encodeCmd =
+        'ffmpeg -ss 10' +
+        ' -i "' +
+        filePath +
+        '"' +
+        ' -qscale:v 2' +
+        ' -frames:v 1' +
+        ' "' +
+        outputFolder +
+        '/thumbnail.png"' +
+        ' && ' +
+        'ffmpeg' +
+        ' -i "' +
+        filePath +
+        '"' +
+        ' -filter_complex "' +
+        '[0:v]' +
+        'scale=trunc(ih*dar/2)*2:trunc(ih/2)*2,' +
+        'setsar=1,' +
+        'split=3[v0][v1][v2];' +
+        '[v0]' +
+        'scale=640:360:' +
+        'force_original_aspect_ratio=decrease:' +
+        'force_divisible_by=2,' +
+        'pad=640:360:(ow-iw)/2:(oh-ih)/2:black,' +
+        'setsar=1[s0];' +
+        '[v1]' +
+        'scale=1280:720:' +
+        'force_original_aspect_ratio=decrease:' +
+        'force_divisible_by=2,' +
+        'pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,' +
+        'setsar=1[s1];' +
+        '[v2]' +
+        'scale=1920:1080:' +
+        'force_original_aspect_ratio=decrease:' +
+        'force_divisible_by=2,' +
+        'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,' +
+        'setsar=1[s2]"' +
+        ' -map "[s0]"' +
+        ' -map "[s1]"' +
+        ' -map "[s2]"' +
+        ' -map 0:a:0' +
+        ' -c:v h264_nvenc' +
+        ' -pix_fmt yuv420p' +
+        ' -c:a aac' +
+        ' -b:a 128k' +
+        ' -rc vbr' +
+        ' -cq 21' +
+        ' -preset p6' +
+        ' -bf 3' +
+        ' -b_ref_mode middle' +
+        ' -spatial-aq 1' +
+        ' -aq-strength 8' +
+        ' -temporal-aq 1' +
+        ' -rc-lookahead 32' +
+        ' -multipass qres' +
+        ' -g 120' +
+        ' -keyint_min 120' +
+        ' -force_key_frames "expr:gte(t,n_forced*2)"' +
+        ' -b:v:0 450k' +
+        ' -maxrate:v:0 675k' +
+        ' -bufsize:v:0 900k' +
+        ' -profile:v:0 main' +
+        ' -b:v:1 1000k' +
+        ' -maxrate:v:1 1500k' +
+        ' -bufsize:v:1 2000k' +
+        ' -profile:v:1 main' +
+        ' -b:v:2 1900k' +
+        ' -maxrate:v:2 2850k' +
+        ' -bufsize:v:2 3800k' +
+        ' -profile:v:2 high' +
+        ' -use_timeline 1' +
+        ' -use_template 1' +
+        ' -single_file 0' +
+        ' -seg_duration 4' +
+        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
+        ' -init_seg_name init_$RepresentationID$.m4s' +
+        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
+        ' -f dash' +
+        ' "' +
+        outputResult +
+        '"';
+      break;
+    case 8:
+    default:
+      // Universal aspect ratio + H.264 software encoder.
+      // Dùng khi node không có NVIDIA GPU/NVENC.
+      encodeCmd =
+        'ffmpeg -ss 10' +
+        ' -i "' +
+        filePath +
+        '"' +
+        ' -qscale:v 2' +
+        ' -frames:v 1' +
+        ' "' +
+        outputFolder +
+        '/thumbnail.png"' +
+        ' && ' +
+        'ffmpeg' +
+        ' -i "' +
+        filePath +
+        '"' +
+        ' -filter_complex "' +
+        '[0:v]' +
+        'scale=trunc(ih*dar/2)*2:trunc(ih/2)*2,' +
+        'setsar=1,' +
+        'split=3[v0][v1][v2];' +
+        '[v0]' +
+        'scale=640:360:' +
+        'force_original_aspect_ratio=decrease:' +
+        'force_divisible_by=2,' +
+        'pad=640:360:(ow-iw)/2:(oh-ih)/2:black,' +
+        'setsar=1[s0];' +
+        '[v1]' +
+        'scale=1280:720:' +
+        'force_original_aspect_ratio=decrease:' +
+        'force_divisible_by=2,' +
+        'pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,' +
+        'setsar=1[s1];' +
+        '[v2]' +
+        'scale=1920:1080:' +
+        'force_original_aspect_ratio=decrease:' +
+        'force_divisible_by=2,' +
+        'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,' +
+        'setsar=1[s2]"' +
+        ' -map "[s0]"' +
+        ' -map "[s1]"' +
+        ' -map "[s2]"' +
+        ' -map 0:a:0' +
+        ' -c:v libx264' +
+        ' -pix_fmt yuv420p' +
+        ' -preset veryfast' +
+        ' -threads 0' +
+        ' -bf 3' +
+        ' -c:a aac' +
+        ' -b:a 128k' +
+        ' -g 120' +
+        ' -keyint_min 120' +
+        ' -sc_threshold 0' +
+        ' -force_key_frames "expr:gte(t,n_forced*2)"' +
+        ' -b:v:0 450k' +
+        ' -maxrate:v:0 675k' +
+        ' -bufsize:v:0 900k' +
+        ' -profile:v:0 main' +
+        ' -b:v:1 1000k' +
+        ' -maxrate:v:1 1500k' +
+        ' -bufsize:v:1 2000k' +
+        ' -profile:v:1 main' +
+        ' -b:v:2 1900k' +
+        ' -maxrate:v:2 2850k' +
+        ' -bufsize:v:2 3800k' +
+        ' -profile:v:2 high' +
+        ' -use_timeline 1' +
+        ' -use_template 1' +
+        ' -single_file 0' +
+        ' -seg_duration 4' +
+        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
+        ' -init_seg_name init_$RepresentationID$.m4s' +
+        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
+        ' -f dash' +
+        ' "' +
+        outputResult +
+        '"';
       break;
   }
   return encodeCmd;

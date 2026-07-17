@@ -149,7 +149,9 @@ app.use(globalErrorHandler);
 
 //#region autoHeartbeat
 // khởi động — KHÔNG await, để nó chạy nền
-heartbeatAPI.heartbeatLoop();
+if (process.env.NODE_ENV === 'development') {
+  heartbeatAPI.heartbeatLoop();
+}
 //#endregion
 
 module.exports = app;
