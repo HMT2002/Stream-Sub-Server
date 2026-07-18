@@ -8,6 +8,8 @@ const videoController = require('./controllers/videoController');
 const testController = require('./controllers/testController');
 const defaultController = require('./controllers/defaultController');
 
+const heartbeatAPI = require('./modules/heartbeatAPI');
+
 const cors = require('cors');
 var path = require('path');
 const fs = require('fs');
@@ -62,8 +64,7 @@ app.use((req, res, next) => {
   next();
 });
 app.get('/is-this-alive', defaultController.CheckIfThisServerIsFckingAlive);
-
-app.use('/api/v1/check', checkRoute);
+app.use('/heartbeat', defaultController.heartbeatCheck);
 
 // #region Handling mpd and m4s token request || phải để này trên cùng để tăng ưu tiên xử lý request duôi *.mpd hoặc *.m4s
 app.use(cors()).get(
@@ -75,6 +76,7 @@ app.use(cors()).get(
   (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
   },
   videoController.MPDTokenHandler
 );
@@ -87,18 +89,41 @@ app.use(cors()).get(
   (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
   },
   videoController.M4STokenHandler
 );
 // #endregion
 
 // #region Handling extra requests, such as subtitle requests
+
+//v1
+// app.get('/videos/v1/*.vtt', videoController.VTTHandler);
+// app.get('/videos/v1/*.ass', videoController.ASSHandler);
+// app.get('/videos/v1/*.srt', videoController.SRTHandler);
+// app.get('/videos/v1/*.mp4', videoController.MP4MPDHandler);
+// app.get('/videos/v1/*.mpd', videoController.MPDHandlerVer1);
+// app.get('/videos/v1/*.m4s', videoController.M4SHandlerVer1);
+// app.get('/videos/v1/*.png', videoController.PNGHandler);
+// //
+
+// //v2
+// app.get('/videos/v2/*.vtt', videoController.VTTHandler);
+// app.get('/videos/v2/*.ass', videoController.ASSHandler);
+// app.get('/videos/v2/*.srt', videoController.SRTHandler);
+// app.get('/videos/v2/*.mp4', videoController.MP4MPDHandler);
+// app.get('/videos/v2/*.mpd', videoController.MPDHandler);
+// app.get('/videos/v2/*.m4s', videoController.M4SHandler);
+// app.get('/videos/v2/*.png', videoController.PNGHandler);
+// //
+
 app.get('/*.vtt', videoController.VTTHandler);
 app.get('/*.ass', videoController.ASSHandler);
 app.get('/*.srt', videoController.SRTHandler);
 app.get('/*.mp4', videoController.MP4MPDHandler);
 app.get('/*.mpd', videoController.MPDHandler);
 app.get('/*.m4s', videoController.M4SHandler);
+app.get('/*.png', videoController.PNGHandler);
 
 // app.get('/*.m3u8', videoController.M3u8Handler);
 // app.get('/*.ts', videoController.TsHandler);
@@ -115,10 +140,18 @@ app.use('/api/v1/upload', uploadRoute);
 app.use('/api/v1/replicate', replicateRoute);
 app.use('/api/v1/delete', deleteRoute);
 app.use('/api/v1/streaming', streamingRoute);
+app.use('/api/v1/check', checkRoute);
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));
 });
 app.use(globalErrorHandler);
+
+//#region autoHeartbeat
+// khởi động — KHÔNG await, để nó chạy nền
+if (process.env.NODE_ENV === 'development') {
+  heartbeatAPI.heartbeatLoop();
+}
+//#endregion
 
 module.exports = app;

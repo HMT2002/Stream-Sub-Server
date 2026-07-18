@@ -26,6 +26,7 @@ const storageVideo = multer.diskStorage({
 const storageChunk = multer.diskStorage({
   destination: videoStoragePath,
   filename: (req, file, cb) => {
+    console.log('req.headers.chunkname: ' + req.headers.chunkname);
     cb(null, req.headers.chunkname);
   },
 });
@@ -61,7 +62,7 @@ const storageIndividualFile = multer.diskStorage({
 });
 
 const multipartMaxSize = 35 * 1024 * 1024; //35mb
-const folderFileMaxSize = 30 * 1024 * 1024; //30mb
+const folderFileMaxSize = 100 * 1024 * 1024; //100mb
 const individualFileMaxSize = 10 * 1024 * 1024; //10mb
 
 const maxSize = 300 * 1024 * 1024; //300mb
@@ -102,12 +103,12 @@ const uploadMultipartFile = multer({
 const uploadMultipartFileChunk = multer({
   storage: storageChunk,
   limits: { fileSize: multipartMaxSize },
-}).single('myMultilPartFileChunk');
+}).single('multipartFileChunk');
 
 const uploadMultipartFileChunkV2 = multer({
   storage: storageChunkV2,
   limits: { fileSize: multipartMaxSize },
-}).single('myMultilPartFileChunk');
+}).single('multipartFileChunk');
 
 const uploadFolderFile = multer({
   storage: storageFolderFile,

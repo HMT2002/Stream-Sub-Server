@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const helperAPI = require('../modules/helperAPI');
+const heartbeatAPI = require('../modules/heartbeatAPI');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const APIFeatures = require('./../utils/apiFeatures');
@@ -46,8 +47,8 @@ exports.CheckHlsFile = catchAsync(async (req, res, next) => {
 
 exports.CheckDashFile = catchAsync(async (req, res, next) => {
   const filename = req.params.filename || 'largetest5';
-  const videoPath = 'videos/' + filename + 'Dash/init.mpd';
-  const dir = 'videos/' + filename + 'Dash';
+  const videoPath = 'videos/' + filename + '/init.mpd';
+  const dir = 'videos/' + filename;
   console.log(dir);
 
   // console.log(fileList);
@@ -88,5 +89,22 @@ exports.CheckIfThisServerIsFckingAlive = catchAsync(async (req, res, next) => {
     alive: true,
     testURL,
     uploadURL,
+  });
+});
+
+exports.heartbeatCheck = catchAsync(async (req, res, next) => {
+  console.log('Check heartbeat');
+  const host = req.get('host');
+  const fullURL = req.protocol + '://' + host + req.originalUrl;
+  console.log(fullURL);
+  const heartbeatInfo = await heartbeatAPI.gatherHeartbeatInfo();
+  const sendRes = await heartbeatAPI.sendHeartbeat(heartbeatInfo);
+
+  res.status(200).json({
+    status: 'alive',
+    message: 'This server is alive',
+    alive: true,
+    fullURL,
+    heartbeatInfo,
   });
 });

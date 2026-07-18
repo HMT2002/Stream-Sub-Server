@@ -32,106 +32,615 @@ const GenerrateRandomString = (length) => {
   return result;
 };
 
+/**
+ * Tạo câu lệnh FFmpeg encode video thành MPEG-DASH.
+ *
+ * Các case được hỗ trợ:
+ * - Case 4: H.264 NVENC, decode và scale bằng CUDA.
+ * - Case 6: H.264 libx264, kích thước cố định.
+ * - Case 7: H.264 NVENC, giữ đúng aspect ratio.
+ * - Case 8: H.264 libx264, giữ đúng aspect ratio.
+ *
+ * @param {number} index Loại encoder cần sử dụng.
+ * @param {string} filePath Đường dẫn video nguồn.
+ * @param {string} outputFolder Thư mục chứa thumbnail.
+ * @param {string} outputResult Đường dẫn file manifest .mpd.
+ * @returns {string} Câu lệnh FFmpeg hoàn chỉnh.
+ */
 const encodeCommand = (index, filePath, outputFolder, outputResult) => {
-  let encodeCmd = '';
+  /**
+   * Quote đường dẫn để xử lý khoảng trắng.
+   *
+   * Hàm này dùng được với:
+   * - cmd.exe trên Windows.
+   * - /bin/sh hoặc Bash trên Linux.
+   *
+   * Không cho phép dấu nháy kép bên trong đường dẫn để tránh tạo
+   * câu lệnh shell không hợp lệ hoặc shell injection.
+   */
+  const quotePath = (value) => {
+    const normalizedValue = String(value);
+
+    if (normalizedValue.includes('"')) {
+      throw new Error(`Đường dẫn không được chứa dấu nháy kép: ${normalizedValue}`);
+    }
+
+    return `"${normalizedValue}"`;
+  };
+
+  /**
+   * Chuẩn hóa dấu phân cách thư mục.
+   *
+   * FFmpeg trên Windows hiểu được dấu "/", vì vậy dùng "/" giúp
+   * việc nối đường dẫn hoạt động giống nhau trên cả hai hệ điều hành.
+   */
+  const normalizedOutputFolder = String(outputFolder).replace(/[\\/]+$/, '');
+
+  // Đường dẫn ảnh thumbnail.
+  const thumbnailPath = `${normalizedOutputFolder}/thumbnail.png`;
+
+  /**
+   * Template tên initialization segment.
+   *
+   * Câu lệnh shell được tạo ra:
+   *
+   *   init_"$"RepresentationID"$".m4s
+   *
+   * Sau khi cmd.exe hoặc Bash phân tích, FFmpeg sẽ nhận:
+   *
+   *   init_$RepresentationID$.m4s
+   *
+   * Cách này không cần kiểm tra process.platform.
+   */
+  const dashInitSegmentName = 'init_"$"RepresentationID"$".m4s';
+
+  /**
+   * Template tên media segment.
+   *
+   * FFmpeg sẽ nhận:
+   *
+   *   chunk_$RepresentationID$_$Number%05d$.m4s
+   */
+  const dashMediaSegmentName = 'chunk_"$"RepresentationID"$"_"$"Number%05d"$".m4s';
+
+  /**
+   * Lệnh tạo thumbnail.
+   *
+   * Dùng "&&" thay cho "|" vì lệnh encode thứ hai không nhận
+   * dữ liệu video từ stdout của lệnh tạo thumbnail.
+   *
+   * Với "&&", encode DASH chỉ bắt đầu khi thumbnail tạo thành công.
+   */
+  const thumbnailCommand = [
+    'ffmpeg',
+    '-y',
+    '-ss 10',
+    `-i ${quotePath(filePath)}`,
+    '-qscale:v 2',
+    '-frames:v 1',
+    quotePath(thumbnailPath),
+  ].join(' ');
+
+  /**
+   * Các tùy chọn DASH dùng chung.
+   */
+  const dashOptions = [
+    // Tạo timeline trong MPD.
+    '-use_timeline 1',
+
+    // Dùng template để mô tả segment.
+    '-use_template 1',
+
+    // Xuất nhiều file segment riêng biệt.
+    '-single_file 0',
+
+    // Mỗi segment dài khoảng 4 giây.
+    '-seg_duration 4',
+
+    // Gom video và audio thành hai adaptation set.
+    '-adaptation_sets "id=0,streams=v id=1,streams=a"',
+
+    // Template tên initialization segment.
+    `-init_seg_name ${dashInitSegmentName}`,
+
+    // Template tên media segment.
+    `-media_seg_name ${dashMediaSegmentName}`,
+
+    // Chọn DASH muxer.
+    '-f dash',
+
+    // Đường dẫn file manifest đầu ra.
+    quotePath(outputResult),
+  ].join(' ');
+
+  // Câu lệnh encode DASH sẽ được gán theo từng case.
+  let dashEncodeCommand = '';
+
   switch (index) {
-    case 0:
-      encodeCmd =
-        'ffmpeg -ss 10 -i ' +
-        filePath +
-        ' -qscale:v 2 -frames:v 1 ' +
-        outputFolder +
-        '/thumbnail.png ' +
-        ' | ' +
-        'ffmpeg -i ' +
-        filePath +
-        ' -c:v libx264' +
-        ' -c:a aac -b:a 128k' +
-        ' -preset veryfast' +
-        ' -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p' +
-        ' -map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:v:0 -map 0:v:0' +
-        ' -b:v:0 300k -s:v:0 720x480 -profile:v:0 baseline' +
-        ' -b:v:1 700k -s:v:1 1080x720 -profile:v:1 main' +
-        ' -b:v:2 1300k -s:v:2 1920x1080 -profile:v:2 high' +
-        ' -b:v:3 2500k -profile:v:3 high' +
-        ' -f mpegts -' +
-        ' | ' +
-        'ffmpeg -i - ' +
-        ' -map 0' +
-        ' -use_timeline 1' +
-        ' -single_file 0' +
-        ' -use_template 1' +
-        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
-        ' -init_seg_name init_$RepresentationID$.m4s' +
-        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
-        ' -f dash ' +
-        outputResult;
+    case 4: {
+      /**
+       * Case 4:
+       *
+       * - Decode bằng NVIDIA CUDA.
+       * - Scale bằng scale_cuda.
+       * - Encode bằng h264_nvenc.
+       *
+       * Case này yêu cầu:
+       * - NVIDIA GPU.
+       * - NVIDIA driver.
+       * - FFmpeg có cuda, scale_cuda và h264_nvenc.
+       */
+      dashEncodeCommand = [
+        // Chương trình encode.
+        'ffmpeg',
+
+        // Ghi đè output nếu đã tồn tại.
+        '-y',
+
+        // Decode video bằng CUDA.
+        '-hwaccel cuda',
+
+        // Giữ frame trên GPU.
+        '-hwaccel_output_format cuda',
+
+        // Video nguồn.
+        `-i ${quotePath(filePath)}`,
+
+        // Tách video thành ba luồng và scale trên GPU.
+        '-filter_complex ' +
+          quotePath(
+            '[0:v]split=3[v0][v1][v2];' +
+              '[v0]scale_cuda=720:480[s0];' +
+              '[v1]scale_cuda=1280:720[s1];' +
+              '[v2]scale_cuda=1920:1080[s2]'
+          ),
+
+        // Map video 480p.
+        '-map "[s0]"',
+
+        // Map video 720p.
+        '-map "[s1]"',
+
+        // Map video 1080p.
+        '-map "[s2]"',
+
+        // Map audio đầu tiên.
+        '-map 0:a:0',
+
+        // Encode video bằng NVIDIA NVENC.
+        '-c:v h264_nvenc',
+
+        // Encode audio bằng AAC.
+        '-c:a aac',
+
+        // Bitrate audio.
+        '-b:a 128k',
+
+        // Variable bitrate.
+        '-rc vbr',
+
+        // Constant quality cho NVENC.
+        '-cq 21',
+
+        // Preset chất lượng cao.
+        '-preset p6',
+
+        // Số lượng B-frame.
+        '-bf 3',
+
+        // Cho phép B-frame làm reference.
+        '-b_ref_mode middle',
+
+        // Bật spatial adaptive quantization.
+        '-spatial-aq 1',
+
+        // Cường độ adaptive quantization.
+        '-aq-strength 8',
+
+        // Bật temporal adaptive quantization.
+        '-temporal-aq 1',
+
+        // Số frame lookahead.
+        '-rc-lookahead 32',
+
+        // Multipass quarter resolution.
+        '-multipass qres',
+
+        // GOP tối đa.
+        '-g 120',
+
+        // GOP tối thiểu.
+        '-keyint_min 120',
+
+        // Ép keyframe mỗi 2 giây.
+        '-force_key_frames "expr:gte(t,n_forced*2)"',
+
+        // Cấu hình video representation 0.
+        '-b:v:0 450k',
+        '-maxrate:v:0 675k',
+        '-bufsize:v:0 900k',
+        '-profile:v:0 main',
+
+        // Cấu hình video representation 1.
+        '-b:v:1 1000k',
+        '-maxrate:v:1 1500k',
+        '-bufsize:v:1 2000k',
+        '-profile:v:1 main',
+
+        // Cấu hình video representation 2.
+        '-b:v:2 1900k',
+        '-maxrate:v:2 2850k',
+        '-bufsize:v:2 3800k',
+        '-profile:v:2 high',
+
+        // Tùy chọn xuất MPEG-DASH.
+        dashOptions,
+      ].join(' ');
+
       break;
-    case 1:
-      encodeCmd =
-        'ffmpeg -ss 10 -i ' +
-        filePath +
-        ' -qscale:v 2 -frames:v 1 ' +
-        outputFolder +
-        '/thumbnail.png ' +
-        ' | ' +
-        'ffmpeg -i ' +
-        filePath +
-        ' -c:v hevc_nvenc' +
-        ' -c:a aac -b:a 128k' +
-        ' -preset 4' +
-        ' -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p -preset p4 -rc vbr ' +
-        ' -map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:v:0 -map 0:v:0' +
-        ' -b:v:0 300k -s:v:0 720x480 -profile:v:0 1' +
-        ' -b:v:1 700k -s:v:1 1080x720 -profile:v:1 1' +
-        ' -b:v:2 1300k -s:v:2 1920x1080 -profile:v:2 2' +
-        ' -b:v:3 2500k -profile:v:3 2' +
-        ' -f mpegts -' +
-        ' | ' +
-        'ffmpeg -i - ' +
-        ' -map 0' +
-        ' -use_timeline 1' +
-        ' -single_file 0' +
-        ' -use_template 1' +
-        ' -seg_duration 10' +
-        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
-        ' -init_seg_name init_$RepresentationID$.m4s' +
-        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
-        ' -f dash ' +
-        outputResult;
+    }
+
+    case 6: {
+      /**
+       * Case 6:
+       *
+       * - Decode và scale bằng CPU.
+       * - Encode bằng libx264.
+       * - Xuất kích thước cố định.
+       *
+       * Case này không yêu cầu NVIDIA GPU.
+       */
+      dashEncodeCommand = [
+        // Chương trình encode.
+        'ffmpeg',
+
+        // Ghi đè output nếu đã tồn tại.
+        '-y',
+
+        // Video nguồn.
+        `-i ${quotePath(filePath)}`,
+
+        // Tách video thành ba luồng và scale bằng CPU.
+        '-filter_complex ' +
+          quotePath(
+            '[0:v]split=3[v0][v1][v2];' +
+              '[v0]scale=720:480[s0];' +
+              '[v1]scale=1280:720[s1];' +
+              '[v2]scale=1920:1080[s2]'
+          ),
+
+        // Map video 480p.
+        '-map "[s0]"',
+
+        // Map video 720p.
+        '-map "[s1]"',
+
+        // Map video 1080p.
+        '-map "[s2]"',
+
+        // Map audio đầu tiên.
+        '-map 0:a:0',
+
+        // Encode video bằng phần mềm.
+        '-c:v libx264',
+
+        // Định dạng pixel tương thích trình duyệt.
+        '-pix_fmt yuv420p',
+
+        // Preset ưu tiên tốc độ.
+        '-preset veryfast',
+
+        // Cho FFmpeg tự chọn số thread.
+        '-threads 0',
+
+        // Số lượng B-frame.
+        '-bf 3',
+
+        // Encode audio bằng AAC.
+        '-c:a aac',
+
+        // Bitrate audio.
+        '-b:a 128k',
+
+        // GOP tối đa.
+        '-g 120',
+
+        // GOP tối thiểu.
+        '-keyint_min 120',
+
+        // Tắt tự động chèn keyframe khi đổi cảnh.
+        '-sc_threshold 0',
+
+        // Ép keyframe mỗi 2 giây.
+        '-force_key_frames "expr:gte(t,n_forced*2)"',
+
+        // Cấu hình video representation 0.
+        '-b:v:0 450k',
+        '-maxrate:v:0 675k',
+        '-bufsize:v:0 900k',
+        '-profile:v:0 main',
+
+        // Cấu hình video representation 1.
+        '-b:v:1 1000k',
+        '-maxrate:v:1 1500k',
+        '-bufsize:v:1 2000k',
+        '-profile:v:1 main',
+
+        // Cấu hình video representation 2.
+        '-b:v:2 1900k',
+        '-maxrate:v:2 2850k',
+        '-bufsize:v:2 3800k',
+        '-profile:v:2 high',
+
+        // Tùy chọn xuất MPEG-DASH.
+        dashOptions,
+      ].join(' ');
+
       break;
-    case 2:
-      encodeCmd =
-        'ffmpeg -ss 10 -i ' +
-        filePath +
-        ' -qscale:v 2 -frames:v 1 ' +
-        outputFolder +
-        '/thumbnail.png ' +
-        ' | ' +
-        'ffmpeg -hwaccel cuda -i ' +
-        filePath +
-        ' -filter_complex "[0:v]split=4[v1][v2][v3][v4];[v1]scale=720x480[v1out];[v2]scale=1080x720[v2out];[v3]scale=1920x1080[v3out];[v4]copy[v4out]" ' +
-        ' -map "[v1out]" -c:v:0 hevc_nvenc -b:v:0 300k  -rc vbr -preset p3 -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p -c:a:0 aac -b:a:0 128k' +
-        ' -map "[v2out]" -c:v:1 hevc_nvenc -b:v:1 700k  -rc vbr -preset p3 -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p -c:a:1 aac -b:a:1 128k' +
-        ' -map "[v3out]" -c:v:2 hevc_nvenc -b:v:2 1300k -rc vbr -preset p3 -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p -c:a:2 aac -b:a:2 128k' +
-        ' -map "[v4out]" -map 0:a:0 -c:v:3 hevc_nvenc -b:v:3 2500k -rc vbr -preset p3 -bf 1 -b_strategy 0 -sc_threshold 0 -pix_fmt yuv420p -c:a:3 aac -b:a:3 128k' +
-        ' -f mpegts -' +
-        ' | ' +
-        'ffmpeg -i - ' +
-        ' -map 0' +
-        ' -use_timeline 1' +
-        ' -single_file 0' +
-        ' -use_template 1' +
-        ' -adaptation_sets "id=0,streams=v id=1,streams=a"' +
-        ' -init_seg_name init_$RepresentationID$.m4s' +
-        ' -media_seg_name chunk_$RepresentationID$_$Number%05d$.m4s' +
-        ' -f dash ' +
-        outputResult;
+    }
+
+    case 7: {
+      /**
+       * Case 7:
+       *
+       * - Decode và resize bằng CPU.
+       * - Encode bằng NVIDIA NVENC.
+       * - Giữ đúng aspect ratio.
+       * - Pad màu đen khi tỷ lệ video không khớp output.
+       */
+      dashEncodeCommand = [
+        // Chương trình encode.
+        'ffmpeg',
+
+        // Ghi đè output nếu đã tồn tại.
+        '-y',
+
+        // Video nguồn.
+        `-i ${quotePath(filePath)}`,
+
+        // Chuẩn hóa aspect ratio, tạo ba kích thước và pad màu đen.
+        '-filter_complex ' +
+          quotePath(
+            '[0:v]' +
+              'scale=trunc(ih*dar/2)*2:trunc(ih/2)*2,' +
+              'setsar=1,' +
+              'split=3[v0][v1][v2];' +
+              '[v0]' +
+              'scale=640:360:' +
+              'force_original_aspect_ratio=decrease:' +
+              'force_divisible_by=2,' +
+              'pad=640:360:(ow-iw)/2:(oh-ih)/2:black,' +
+              'setsar=1[s0];' +
+              '[v1]' +
+              'scale=1280:720:' +
+              'force_original_aspect_ratio=decrease:' +
+              'force_divisible_by=2,' +
+              'pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,' +
+              'setsar=1[s1];' +
+              '[v2]' +
+              'scale=1920:1080:' +
+              'force_original_aspect_ratio=decrease:' +
+              'force_divisible_by=2,' +
+              'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,' +
+              'setsar=1[s2]'
+          ),
+
+        // Map video 360p.
+        '-map "[s0]"',
+
+        // Map video 720p.
+        '-map "[s1]"',
+
+        // Map video 1080p.
+        '-map "[s2]"',
+
+        // Map audio đầu tiên.
+        '-map 0:a:0',
+
+        // Encode video bằng NVIDIA NVENC.
+        '-c:v h264_nvenc',
+
+        // Định dạng pixel tương thích trình duyệt.
+        '-pix_fmt yuv420p',
+
+        // Encode audio bằng AAC.
+        '-c:a aac',
+
+        // Bitrate audio.
+        '-b:a 128k',
+
+        // Variable bitrate.
+        '-rc vbr',
+
+        // Constant quality cho NVENC.
+        '-cq 21',
+
+        // Preset chất lượng cao.
+        '-preset p6',
+
+        // Số lượng B-frame.
+        '-bf 3',
+
+        // Cho phép B-frame làm reference.
+        '-b_ref_mode middle',
+
+        // Bật spatial adaptive quantization.
+        '-spatial-aq 1',
+
+        // Cường độ adaptive quantization.
+        '-aq-strength 8',
+
+        // Bật temporal adaptive quantization.
+        '-temporal-aq 1',
+
+        // Số frame lookahead.
+        '-rc-lookahead 32',
+
+        // Multipass quarter resolution.
+        '-multipass qres',
+
+        // GOP tối đa.
+        '-g 120',
+
+        // GOP tối thiểu.
+        '-keyint_min 120',
+
+        // Tắt tự động chèn keyframe khi đổi cảnh.
+        '-sc_threshold 0',
+
+        // Ép keyframe mỗi 2 giây.
+        '-force_key_frames "expr:gte(t,n_forced*2)"',
+
+        // Cấu hình video representation 0.
+        '-b:v:0 450k',
+        '-maxrate:v:0 675k',
+        '-bufsize:v:0 900k',
+        '-profile:v:0 main',
+
+        // Cấu hình video representation 1.
+        '-b:v:1 1000k',
+        '-maxrate:v:1 1500k',
+        '-bufsize:v:1 2000k',
+        '-profile:v:1 main',
+
+        // Cấu hình video representation 2.
+        '-b:v:2 1900k',
+        '-maxrate:v:2 2850k',
+        '-bufsize:v:2 3800k',
+        '-profile:v:2 high',
+
+        // Tùy chọn xuất MPEG-DASH.
+        dashOptions,
+      ].join(' ');
+
       break;
-    default:
+    }
+
+    case 8:
+    default: {
+      /**
+       * Case 8:
+       *
+       * - Decode, resize và encode bằng CPU.
+       * - Encode bằng libx264.
+       * - Giữ đúng aspect ratio.
+       * - Pad màu đen khi tỷ lệ video không khớp output.
+       *
+       * Đây cũng là case mặc định.
+       */
+      dashEncodeCommand = [
+        // Chương trình encode.
+        'ffmpeg',
+
+        // Ghi đè output nếu đã tồn tại.
+        '-y',
+
+        // Video nguồn.
+        `-i ${quotePath(filePath)}`,
+
+        // Chuẩn hóa aspect ratio, tạo ba kích thước và pad màu đen.
+        '-filter_complex ' +
+          quotePath(
+            '[0:v]' +
+              'scale=trunc(ih*dar/2)*2:trunc(ih/2)*2,' +
+              'setsar=1,' +
+              'split=3[v0][v1][v2];' +
+              '[v0]' +
+              'scale=640:360:' +
+              'force_original_aspect_ratio=decrease:' +
+              'force_divisible_by=2,' +
+              'pad=640:360:(ow-iw)/2:(oh-ih)/2:black,' +
+              'setsar=1[s0];' +
+              '[v1]' +
+              'scale=1280:720:' +
+              'force_original_aspect_ratio=decrease:' +
+              'force_divisible_by=2,' +
+              'pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,' +
+              'setsar=1[s1];' +
+              '[v2]' +
+              'scale=1920:1080:' +
+              'force_original_aspect_ratio=decrease:' +
+              'force_divisible_by=2,' +
+              'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,' +
+              'setsar=1[s2]'
+          ),
+
+        // Map video 360p.
+        '-map "[s0]"',
+
+        // Map video 720p.
+        '-map "[s1]"',
+
+        // Map video 1080p.
+        '-map "[s2]"',
+
+        // Map audio đầu tiên.
+        '-map 0:a:0',
+
+        // Encode video bằng phần mềm.
+        '-c:v libx264',
+
+        // Định dạng pixel tương thích trình duyệt.
+        '-pix_fmt yuv420p',
+
+        // Preset ưu tiên tốc độ.
+        '-preset veryfast',
+
+        // Cho FFmpeg tự chọn số thread.
+        '-threads 0',
+
+        // Số lượng B-frame.
+        '-bf 3',
+
+        // Encode audio bằng AAC.
+        '-c:a aac',
+
+        // Bitrate audio.
+        '-b:a 128k',
+
+        // GOP tối đa.
+        '-g 120',
+
+        // GOP tối thiểu.
+        '-keyint_min 120',
+
+        // Tắt tự động chèn keyframe khi đổi cảnh.
+        '-sc_threshold 0',
+
+        // Ép keyframe mỗi 2 giây.
+        '-force_key_frames "expr:gte(t,n_forced*2)"',
+
+        // Cấu hình video representation 0.
+        '-b:v:0 450k',
+        '-maxrate:v:0 675k',
+        '-bufsize:v:0 900k',
+        '-profile:v:0 main',
+
+        // Cấu hình video representation 1.
+        '-b:v:1 1000k',
+        '-maxrate:v:1 1500k',
+        '-bufsize:v:1 2000k',
+        '-profile:v:1 main',
+
+        // Cấu hình video representation 2.
+        '-b:v:2 1900k',
+        '-maxrate:v:2 2850k',
+        '-bufsize:v:2 3800k',
+        '-profile:v:2 high',
+
+        // Tùy chọn xuất MPEG-DASH.
+        dashOptions,
+      ].join(' ');
+
       break;
+    }
   }
-  return encodeCmd;
+
+  /**
+   * Chạy tạo thumbnail trước.
+   * Chỉ encode DASH khi thumbnail được tạo thành công.
+   */
+  return `${thumbnailCommand} && ${dashEncodeCommand}`;
 };
 
 const GenerrateRandomNumberBetween = (min, max) => {
@@ -291,7 +800,7 @@ const encodeIntoDashVer2 = async (destination, originalname, statusID) => {
   const filenameWithoutExt = originalname.split('.')[0];
   const outputFolder = destination + filenameWithoutExt + 'Dash';
   const outputResult = outputFolder + '/init.mpd';
-  const videoStatus = await VideoStatus.findById(statusID);
+  // const videoStatus = await VideoStatus.findById(statusID);
   fs.access(outputFolder, (error) => {
     if (error) {
       fs.mkdir(outputFolder, (error) => {
@@ -355,8 +864,9 @@ const encodeIntoDashVer2 = async (destination, originalname, statusID) => {
     .on('start', async (commandLine) => {
       console.log('start', commandLine);
       startTime = new Date().getTime();
-      videoStatus.status = 'encoding';
-      await videoStatus.save();
+      // const videoStatus = await VideoStatus.findById(statusID);
+      // videoStatus.status = 'encoding';
+      // await videoStatus.save();
     })
     .on('codecData', (codecData) => console.log('codecData', codecData))
     .on('error', (error) => console.log('error', error))
@@ -385,10 +895,10 @@ const encodeIntoDashVer2 = async (destination, originalname, statusID) => {
       );
       console.log(encodeDuration);
 
-      videoStatus.status = 'ready';
-      videoStatus.videoDuration = videoDuration;
-      videoStatus.encodeDuration = encodeDuration;
-      await videoStatus.save();
+      // videoStatus.status = 'ready';
+      // videoStatus.videoDuration = videoDuration;
+      // videoStatus.encodeDuration = encodeDuration;
+      // await videoStatus.save();
     })
     .run();
 };
@@ -400,7 +910,7 @@ const encodeIntoDashVer3 = async (destination, originalname, statusID) => {
   const filenameWithoutExt = originalname.split('.')[0];
   const outputFolder = destination + filenameWithoutExt + 'Dash';
   const outputResult = outputFolder + '/init.mpd';
-  const videoStatus = await VideoStatus.findById(statusID);
+  // const videoStatus = await VideoStatus.findById(statusID);
   fs.access(outputFolder, (error) => {
     if (error) {
       fs.mkdir(outputFolder, (error) => {
@@ -592,8 +1102,8 @@ const encodeIntoDashVer3 = async (destination, originalname, statusID) => {
     .on('start', async (commandLine) => {
       console.log('start', commandLine);
       startTime = new Date().getTime();
-      videoStatus.status = 'encoding';
-      await videoStatus.save();
+      // videoStatus.status = 'encoding';
+      // await videoStatus.save();
     })
     .on('codecData', (codecData) => console.log('codecData', codecData))
     .on('error', (error) => console.log('error', error))
@@ -635,10 +1145,10 @@ const encodeIntoDashVer3 = async (destination, originalname, statusID) => {
           );
           console.log(encodeDuration);
 
-          videoStatus.status = 'ready';
-          videoStatus.videoDuration = videoDuration;
-          videoStatus.encodeDuration = encodeDuration;
-          await videoStatus.save();
+          // videoStatus.status = 'ready';
+          // videoStatus.videoDuration = videoDuration;
+          // videoStatus.encodeDuration = encodeDuration;
+          // await videoStatus.save();
         })
         .run();
     })
@@ -650,9 +1160,9 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
   console.log({ destination, originalname });
   const filePath = destination + originalname;
   const filenameWithoutExt = originalname.split('.')[0];
-  const outputFolder = destination + filenameWithoutExt + 'Dash';
+  const outputFolder = destination + filenameWithoutExt;
   const outputResult = outputFolder + '/init.mpd';
-  const videoStatus = await VideoStatus.findById(statusID);
+  // const videoStatus = await VideoStatus.findById(statusID);
   fs.access(outputFolder, (error) => {
     if (error) {
       fs.mkdir(outputFolder, (error) => {
@@ -671,7 +1181,7 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
   let encodeDuration = 0;
   let videoDuration = 0;
 
-  let commandCombine = encodeCommand(1, filePath, outputFolder, outputResult);
+  let commandCombine = encodeCommand(Number(process.env.ENCODE_TYPE), filePath, outputFolder, outputResult);
 
   console.log(commandCombine);
 
@@ -705,7 +1215,7 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
   // Handle completion
   process_combine.on('close', async (code) => {
     if (code === 0) {
-      console.log('Video conversion completed successfully');
+      // console.log('Video conversion completed successfully');
     } else {
       const error = new Error(`FFmpeg process_combine exited with code ${code}`);
       console.error(error.message);
@@ -728,17 +1238,17 @@ const encodeIntoDashVer4 = async (destination, originalname, statusID) => {
         encodeDuration +
         ' seconds to encode a ' +
         videoDuration +
-        ' seconds video'
+        ' seconds video' +
+        ' with command: ' +
+        commandCombine
     );
-    console.log(encodeDuration);
-    console.log(commandCombine);
 
-    if (videoStatus !== null) {
-      videoStatus.status = 'ready';
-      videoStatus.videoDuration = videoDuration;
-      videoStatus.encodeDuration = encodeDuration;
-      await videoStatus.save();
-    }
+    // if (videoStatus !== null) {
+    //   // videoStatus.status = 'ready';
+    //   // videoStatus.videoDuration = videoDuration;
+    //   // videoStatus.encodeDuration = encodeDuration;
+    //   // await videoStatus.save();
+    // }
   });
 };
 
@@ -747,7 +1257,7 @@ const encodeIntoDash_test = async (videoname) => {
   console.log({ videoname });
   const filePath = videoname;
   const filenameWithoutExt = videoname.split('.')[0];
-  const outputFolder = filenameWithoutExt + 'Dash';
+  const outputFolder = filenameWithoutExt;
   const outputResult = outputFolder + '/init.mpd';
   fs.access(outputFolder, (error) => {
     if (error) {

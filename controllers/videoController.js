@@ -258,6 +258,71 @@ exports.MP4MPDHandler = catchAsync(async (req, res, next) => {
   }
 });
 
+exports.MPDHandlerVer1 = catchAsync(async (req, res, next) => {
+  console.log('videoController.MPDHandlerVer1 -> ');
+  console.log(req.url);
+  let requestURL = req.url.replace('/v1', '');
+
+  if (fs.existsSync('./' + requestURL)) {
+    console.log('mpd token is exist');
+    fs.readFile(requestURL + '/init.mpd', 'utf8', (err, data) => {
+      if (err) {
+        helperAPI.EnhaceConsoleLogType('MPD file not found!', 'NOTI');
+        return res.status(404).send('MPD file not found');
+      }
+
+      // Parse the MPD XML
+      const parser = new DOMParser();
+      const serializer = new XMLSerializer();
+      const xmlDoc = parser.parseFromString(data, 'text/xml');
+
+      // Find all mpd base urls (SegmentTemplate elements with media attributes)
+      const mpdTemplates = xmlDoc.getElementsByTagName('MPD');
+      const mpdTemplate = mpdTemplates[0];
+      for (let i = 0; i < 1; i++) {
+        const newBaseURLTag = xmlDoc.createElement('BaseURL');
+        newBaseURLTag.setAttribute('dvb:priority', i + 1);
+        newBaseURLTag.setAttribute('dvb:weight', 1);
+        const baseURLText = xmlDoc.createTextNode('http://localhost:9' + i + 1 + '00/videos/');
+        newBaseURLTag.appendChild(baseURLText);
+        mpdTemplate.appendChild(newBaseURLTag);
+      }
+
+      // Serialize back to XML
+      const modifiedMPD = serializer.serializeToString(xmlDoc);
+
+      var stream = fs.createReadStream('./' + requestURL);
+      stream = modifiedMPD;
+      // res.writeHead(206);
+      // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
+      res.setHeader('Content-Type', 'application/dash+xml');
+      res.statusCode = 200;
+      // stream.pipe(res);
+      res.send(modifiedMPD);
+    });
+  } else {
+    console.log('mpd ver 1 is not exist');
+    res.end();
+    return;
+  }
+});
+exports.M4SHandlerVer1 = catchAsync(async (req, res, next) => {
+  console.log('m4s ver 1 is here');
+  console.log(req.url);
+  if (fs.existsSync('./' + req.url)) {
+    console.log('m4s ver 1 is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    // res.writeHead(206);
+    res.setHeader('Content-Type', 'video/iso.segment');
+    res.statusCode = 200;
+    stream.pipe(res);
+  } else {
+    console.log('m4s ver 1 is not exist');
+    res.end();
+    return;
+  }
+});
+
 exports.MPDHandler = catchAsync(async (req, res, next) => {
   console.log('mpd is here');
   console.log(req.url);
@@ -283,12 +348,27 @@ exports.M4SHandler = catchAsync(async (req, res, next) => {
     console.log('m4s is exist');
     const stream = fs.createReadStream('./' + req.url);
     // res.writeHead(206);
-    // Không nên để m4s header status code là 206 vì có thể không chơi được trên VLC hoặc mpv trên android
     res.setHeader('Content-Type', 'video/iso.segment');
     res.statusCode = 200;
     stream.pipe(res);
   } else {
     console.log('m4s is not exist');
+    res.end();
+    return;
+  }
+});
+exports.PNGHandler = catchAsync(async (req, res, next) => {
+  console.log('png is here');
+  console.log(req.url);
+
+  if (fs.existsSync('./' + req.url)) {
+    console.log('png is exist');
+    const stream = fs.createReadStream('./' + req.url);
+    res.setHeader('Content-Type', 'image/png');
+    res.statusCode = 200;
+    stream.pipe(res);
+  } else {
+    console.log('png is not exist');
     res.end();
     return;
   }
@@ -865,10 +945,10 @@ exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
   const destination = req.file.destination;
   console.log(destination);
   //const fileExtension = path.extname(req.file.path);
-  let arrayChunkName = req.body.arraychunkname.split(',');
-  console.log(arrayChunkName);
+  let chunkNames = req.body.chunknames.split(',');
+  console.log(chunkNames);
   let flag = true;
-  arrayChunkName.forEach((chunkName) => {
+  chunkNames.forEach((chunkName) => {
     if (!fs.existsSync(destination + chunkName)) {
       flag = false;
     }
@@ -897,12 +977,12 @@ exports.UploadNewFileLargeMultilpart = catchAsync(async (req, res, next) => {
 exports.UploadNewFileLargeMultilpartConcatenate = catchAsync(async (req, res, next) => {
   console.log(req.body);
   console.log(req.headers);
-  let arrayChunkName = req.body.arraychunkname;
+  let chunkNames = req.body.chunknames;
   let filename = req.body.filename;
   let ext = req.body.ext;
   let destination = req.body.destination;
   console.log('file is completed, begin concat');
-  arrayChunkName.forEach((chunkName) => {
+  chunkNames.forEach((chunkName) => {
     console.log(chunkName);
     console.log('begin append');
     console.log(destination);
@@ -1171,7 +1251,7 @@ exports.MPDTokenHandler = catchAsync(async (req, res, next) => {
 });
 exports.M4STokenHandler = catchAsync(async (req, res, next) => {
   console.log('videoController.M4STokenHandler -> ');
-  console.log(req.params);
+  // console.log(req.params);
 
   let segment = req.params.segment;
   let JWTPacket = req.params.token;
@@ -1185,7 +1265,14 @@ exports.M4STokenHandler = catchAsync(async (req, res, next) => {
     //   flagCheckM4SToken = false;
     //   isM4SLegit = await checkJWTToken(decoded);
     // }
-    isM4SLegit = await checkJWTToken(decoded);
+    // Cấu hình: comment/uncomment dòng nào muốn bật
+    const activeChecks = [
+      // checkJWTToken(decoded), // điều kiện 1
+      // checkHeaderSecret(req), // điều kiện 2
+    ];
+    // Chọn 1 trong 2 mode:
+    isM4SLegit = (await Promise.all(activeChecks)).every(Boolean); // AND: tất cả phải pass
+    // isM4SLegit = (await Promise.all(activeChecks)).some(Boolean); // OR: 1 trong số pass là đủ
   } catch (e) {
     helperAPI.EnhaceConsoleLogType(e, 'ERR');
     decoded = null;
@@ -1225,6 +1312,22 @@ const checkJWTToken = async (decoded) => {
   let indexOfSessionID = blacklist.blacklist.findIndex((e) => e.sessionID === sessionID);
   console.log(indexOfSessionID);
   if (indexOfSessionID > -1) {
+    return false;
+  }
+
+  return true;
+};
+const checkHeaderSecret = async (req) => {
+  helperAPI.EnhaceConsoleLogType('checkHeaderSecret', 'NOTI');
+
+  const sessionId = req.headers['x-player-session'];
+  const playerToken = req.headers['x-player-token'];
+  // console.log('Headers:', req.headers);
+
+  if (!sessionId || !playerToken) {
+    return false;
+  }
+  if (playerToken !== 'abcdef123456' || sessionId !== '1234567890') {
     return false;
   }
 
