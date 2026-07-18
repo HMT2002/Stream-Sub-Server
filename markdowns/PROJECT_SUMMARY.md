@@ -2,6 +2,38 @@
 
 > Tài liệu này được tạo để export sang chat/session mới, mô tả toàn bộ project.
 
+> [UPDATED 2026-07-19] Đọc mục 0 trước. Audit chi tiết và bằng chứng code:
+> [current-implementation-audit-2026-07.md](current-implementation-audit-2026-07.md).
+
+---
+
+## 0. Trạng thái hiện hành theo code (2026-07-19)
+
+Snapshot được đối chiếu: branch `alpha`, commit `0427d60` ngày 2026-07-17.
+
+- Quyết định TARGET là sub-node nhẹ, **không MongoDB/Redis/BullMQ**, nhưng code hiện tại **chưa
+  lược bỏ MongoDB hoàn toàn**: `server.js` và `server_pro.js` còn gọi `dbVideoSharing.connect()`,
+  package còn `mongoose`, replicate V2 còn query `Video`/`Server` tại node.
+- Runtime không có Redis/BullMQ hoạt động. `redisAPI.js` là dead/broken prototype và không được
+  import; package cũng không có dependency `redis`/BullMQ.
+- `p-queue` chưa có. Encode spawn trực tiếp, không giới hạn concurrency và không có durable job
+  state.
+- Heartbeat prototype dùng recursive loop, interval ~10s, jitter, timeout 5s và inventory hash;
+  nhưng auto loop chỉ bật khi `NODE_ENV === 'development'`, central chỉ lưu snapshot in-memory,
+  payload chưa có health/jobs/bootId/seq.
+- Upload gọi encode fire-and-forget rồi trả 201; chưa có `202 + jobId`. Các update `VideoStatus`
+  trong sub đã bị comment, nên flow cũ “encoding → ready tại sub” không còn đúng.
+- Replication gửi trực tiếp node↔node, nhưng tuần tự từng file, chưa checksum/range/resume/atomic
+  finalize. Replicate V2 vẫn phụ thuộc MongoDB tại source node.
+- nginx port 9150 đã có static delivery bằng `sendfile` và frontend mới ưu tiên URL nginx. Tuy
+  nhiên `/__auth` đang comment và 401/403/5xx đều fallback `@serve`: **fail-open để test**.
+- Commit 2026-07-17 bổ sung encode type 7 (H.264 NVENC) và 8/default (libx264), ladder
+  360p/720p/1080p có scale+pad+setsar; đây là thông tin mới hơn phần encode cũ bên dưới.
+
+> [SUPERSEDED 2026-07-19] Các mục 1–12 bên dưới là snapshot cũ, giữ nguyên để tra lịch sử.
+> Mọi câu “sub không/có DB”, “VideoStatus được update”, “heartbeat production”, “p-queue” phải
+> đối chiếu mục 0 và audit trước khi dùng.
+
 ---
 
 ## 1. Tổng quan
@@ -376,10 +408,20 @@ pm2 start ecosystem.config.js
 
 ## 12. Lưu ý quan trọng
 
-- **Blacklist in-memory**: mất khi server restart — nếu cần persist phải dùng Redis/DB
+- **Blacklist in-memory**: mất khi server restart — nếu cần persist dùng **MongoDB** (KHÔNG Redis
+  — đã bỏ Redis khỏi dự án, xem `central-node-architecture-comparison.md` §8). Phát hiện node
+  restart âm thầm để re-push revocation: cơ chế `bootId`/`seq` trong heartbeat (§4.2 file đó).
 - `config.env` chứa credentials thật — không commit vào git production
 - `ENCODE_TYPE=1` dùng `hevc_nvenc` (NVIDIA GPU) — nếu không có GPU phải đổi sang `ENCODE_TYPE=0` hoặc `3`
 - Server timeout 15s (`server.timeout = 15000`) — upload file lớn cần điều chỉnh
 - Chunk upload size: 30MB mỗi chunk khi replicate
 - `x-player-token` và `x-player-session` hiện hardcode `'abcdef123456'` / `'1234567890'` trong code — **cần thay bằng logic thật trước khi production**
 - Database: mặc định dùng local MongoDB `mongodb://127.0.0.1:27017/STREAMING_DB`
+
+---
+
+## Changelog
+
+- **2026-07-19** — Bổ sung mục 0 theo static code audit. Ghi rõ MongoDB mới là quyết định cần
+  migration chứ chưa bị xóa khỏi code; xác nhận không Redis/BullMQ/p-queue runtime; cập nhật
+  heartbeat, encode 7/8, replicate và nginx fail-open. Giữ nguyên snapshot cũ để reference.

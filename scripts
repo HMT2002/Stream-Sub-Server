@@ -17,6 +17,7 @@ sudo service nginx restart
 pm2 start server.js
 pm2 save
 pm2 logs server
+sudo tail -f /var/log/nginx/access.log
 
 ==============================Đừng chạy mấy lệnh này=============================
                                     SJIS
