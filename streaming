@@ -10,5 +10,8 @@ server {
 		proxy_set_header Connection 'upgrade';
 		proxy_set_header Host $host;
 		proxy_cache_bypass $http_upgrade;
+        add_header Access-Control-Allow-Headers  'Content-Type, Authorization, Range, X-Player-Token, X-Player-Session' always;
+        add_header Access-Control-Expose-Headers 'Content-Length, Content-Range' always;
+        add_header Access-Control-Max-Age        86400 always;		
 	}
 }

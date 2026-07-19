@@ -8,9 +8,8 @@ node -v
 cd Stream-Sub-Server
 mv config.env_ config.env
 test -f config.env || { echo "THIẾU config.env — copy file này lên trước khi tiếp tục"; }
---sudo cp streaming /etc/nginx/sites-enabled/default
-sudo cp site-enabled-streaming /etc/nginx/sites-enabled/default
-sudo cp nginx.conf /etc/nginx/nginx.conf
+sudo cp streaming /etc/nginx/sites-enabled/default
+sudo cp nginx_sub.conf /etc/nginx/nginx.conf
 sudo nginx -t
 sudo npm install
 sudo npm install pm2 -g
