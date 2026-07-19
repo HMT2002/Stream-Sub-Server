@@ -6,6 +6,9 @@ dotenv.config({ path: './config.env' });
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
+const uploadV2Route = require('./routes/v2/uploadRoute');
+const replicationV2Route = require('./routes/v2/replicationRoute');
+const globalErrorHandler = require('./controllers/errorController');
 
 const app = express();
 if (process.env.NODE_ENV === 'development') {
@@ -16,10 +19,10 @@ app.use(express.json());
 
 app.use(cors());
 app.options('*', cors());
-const dbVideoSharing = require('./config/database/db_index');
+app.use('/api/v2/uploads', uploadV2Route);
+app.use('/api/v2/replications', replicationV2Route);
+app.use(globalErrorHandler);
 var httpAttach = require('http-attach'); // useful module for attaching middlewares
-
-dbVideoSharing.connect();
 
 const hls = require('hls-server');
 const fs = require('fs');
@@ -136,4 +139,4 @@ app.use('/api/stream/control', (req, res, next) => {
 const server = app.listen(port, () => {
   console.log('App listening to ' + port);
 });
-server.timeout = 15000; //15s
+server.timeout = 125000; // v2 replication waits up to 120s for destination acknowledgements

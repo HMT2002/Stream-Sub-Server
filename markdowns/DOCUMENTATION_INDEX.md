@@ -30,6 +30,7 @@ chứng minh, coi nó là **TARGET/backlog**, không phải implementation.
 - `node-network-reachability-constraints.md`
 - `deployment-hidden-bugs-and-pitfalls.md`
 - `DOCUMENTATION_INDEX.md`
+- `upload-replication-contract-v2.md`
 
 ### Theo domain đang có trong Central
 
@@ -62,6 +63,7 @@ repository; không ghi đè bản Central nếu working tree có update mới h�
 - `multi-cloud-free-tier-node-deployment.md`
 - `oracle-storage-node-deploy-log.md`
 - `DOCUMENTATION_INDEX.md`
+- `upload-replication-contract-v2.md`
 
 ### Media/encode/nginx trực tiếp liên quan node
 
@@ -89,7 +91,13 @@ Không cần copy các bài career/market/CDN thuần nghiên cứu vào sub rep
 4. Khi assertion cũ sai, thêm `SUPERSEDED` + assertion mới `UPDATED`.
 5. Sau khi canonical ổn định mới copy nhóm liên quan sang project code.
 
+## Upload/replication contract đang áp dụng
+
+- `upload-replication-contract-v2.md` — contract FE → Central → Sub và Sub → Sub; Central sở hữu DB, Sub chỉ xử lý data plane.
+
 ## Changelog
+
+- **2026-07-19** — Thêm contract upload/replication v2 và ranh giới runtime Sub không DB.
 
 - **2026-07-19** — Tạo index sau khi đối chiếu ba repo; xác định Stream-Documents là canonical,
   lập nhóm sync chọn lọc cho Central/Sub và quy tắc phân biệt AS-IS/TARGET/version mới hơn.

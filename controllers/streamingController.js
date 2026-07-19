@@ -6,7 +6,6 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const APIFeatures = require('../utils/apiFeatures');
 const blacklist = require('../globals/blacklist');
-const DASHSessionEnd = require('../models/mongo/DASHSessionEnd');
 
 exports.StopStreaming = catchAsync(async (req, res, next) => {
   console.log('streamingController.StopStreaming -> ');

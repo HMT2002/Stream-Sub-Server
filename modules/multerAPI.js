@@ -1,10 +1,12 @@
 const multer = require('multer');
 const fs = require('fs');
+const path = require('path');
 const helperAPI = require('./helperAPI');
 
 const defaultStoragePath = 'resources-storage/uploads/';
 const videoStoragePath = 'videos/';
 const videoChunkStoragePath = 'videos/';
+const videoStorageRoot = path.resolve(__dirname, '..', 'videos');
 
 const storage = multer.diskStorage({
   destination: defaultStoragePath,
@@ -32,7 +34,20 @@ const storageChunk = multer.diskStorage({
 });
 
 const storageChunkV2 = multer.diskStorage({
-  destination: videoStoragePath,
+  destination: (req, file, cb) => {
+    fs.mkdirSync(videoStorageRoot, { recursive: true });
+    cb(null, videoStorageRoot);
+  },
+  filename: (req, file, cb) => cb(null, req.uploadContract.chunkName),
+});
+
+const storageReplicatedFile = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const videoFolder = path.join(videoStorageRoot, req.replicationContract.storageKey);
+    fs.mkdirSync(videoFolder, { recursive: true });
+    cb(null, videoFolder);
+  },
+  filename: (req, file, cb) => cb(null, req.replicationContract.fileName),
 });
 
 const storageFolderFile = multer.diskStorage({
@@ -109,6 +124,11 @@ const uploadMultipartFileChunkV2 = multer({
   storage: storageChunkV2,
   limits: { fileSize: multipartMaxSize },
 }).single('multipartFileChunk');
+
+const uploadReplicatedFile = multer({
+  storage: storageReplicatedFile,
+  limits: { fileSize: folderFileMaxSize },
+}).single('replicationFile');
 
 const uploadFolderFile = multer({
   storage: storageFolderFile,
@@ -191,5 +211,7 @@ module.exports = {
   uploadMultipartFileChunk,
   uploadFolderFile,
   uploadMultipartFileChunkV2,
+  uploadContractChunk: uploadMultipartFileChunkV2,
+  uploadReplicatedFile,
   uploadIndividualFile,
 };

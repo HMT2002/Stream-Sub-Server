@@ -41,6 +41,16 @@ module.exports = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
+  if (req.originalUrl.startsWith('/api/v2/')) {
+    return res.status(err.statusCode).json({
+      ok: false,
+      error: {
+        code: err.code || (err.statusCode === 400 ? 'INVALID_REQUEST' : 'SUB_NODE_ERROR'),
+        message: err.message || 'Sub-node request failed',
+      },
+    });
+  }
+
   // console.log('Err in error controller ');
   // console.log(err.message);
 

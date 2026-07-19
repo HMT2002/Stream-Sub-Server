@@ -4,7 +4,7 @@
   "description": "sub node for streaming server",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test tests/contracts.test.js",
     "start": "nodemon server.js",
     "start_pro": "nodemon server_pro.js"
   },

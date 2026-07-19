@@ -13,7 +13,6 @@ const blacklist = require('../globals/blacklist');
 const { exec, execFileSync, spawn } = require('child_process');
 
 const fluentFfmpeg = require('fluent-ffmpeg');
-const DASHSessionEnd = require('../models/mongo/DASHSessionEnd');
 const { decode } = require('punycode');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 fluentFfmpeg.setFfmpegPath(ffmpegPath);

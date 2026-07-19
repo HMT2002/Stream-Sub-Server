@@ -7,6 +7,27 @@
 
 ---
 
+## 0A. UPDATED — upload/replication v2 và DB ownership (2026-07-19)
+
+> **SUPERSEDED:** các đoạn bên dưới nói `server.js`/`server_pro.js` còn connect Mongo hoặc
+> `send-folder-v2` còn query `Video`/`Server` mô tả snapshot trước thay đổi này.
+
+- Runtime Sub hiện là data plane không DB: entrypoint không connect Mongo và controller active
+  không import model. Dependency/model/config Mongoose cũ còn trên đĩa để cleanup riêng, tránh
+  thay đổi route v1 ngoài phạm vi.
+- `POST /api/v2/uploads/chunks` nhận upload session Central cấp, tự suy ra filename part, ghép
+  theo thứ tự bằng buffer cố định và trả `202 Accepted`; không nhận `statusId`, không query DB.
+- `POST /api/v2/replications/send-folder` nhận `jobId`, `storageKey` và destination metadata.
+  Source gửi file tới `POST /api/v2/replications/receive-file`, kiểm tra ack từng file; Central
+  chỉ cập nhật DB sau acknowledgement tổng hợp hợp lệ.
+- Cả entrypoint dev và pro đều mount upload/replication v2; server timeout là 125s để khớp
+  connector timeout 120s.
+- Body ID-only từ Central cũ trả HTTP 426 rõ ràng thay vì query DB. Rollout an toàn là
+  **Central mới → Sub mới → FE mới**; Central mới có fallback để bridge Sub cũ.
+- Replication vẫn tuần tự; checksum, Range/resume, atomic finalize và durable callback là backlog.
+
+Contract chi tiết: [upload-replication-contract-v2.md](upload-replication-contract-v2.md).
+
 ## 0. Trạng thái hiện hành theo code (2026-07-19)
 
 Snapshot được đối chiếu: branch `alpha`, commit `0427d60` ngày 2026-07-17.
@@ -413,7 +434,7 @@ pm2 start ecosystem.config.js
   restart âm thầm để re-push revocation: cơ chế `bootId`/`seq` trong heartbeat (§4.2 file đó).
 - `config.env` chứa credentials thật — không commit vào git production
 - `ENCODE_TYPE=1` dùng `hevc_nvenc` (NVIDIA GPU) — nếu không có GPU phải đổi sang `ENCODE_TYPE=0` hoặc `3`
-- Server timeout 15s (`server.timeout = 15000`) — upload file lớn cần điều chỉnh
+- **UPDATED 2026-07-19:** server timeout là 125s để connector replication 120s có thể trả acknowledgement.
 - Chunk upload size: 30MB mỗi chunk khi replicate
 - `x-player-token` và `x-player-session` hiện hardcode `'abcdef123456'` / `'1234567890'` trong code — **cần thay bằng logic thật trước khi production**
 - Database: mặc định dùng local MongoDB `mongodb://127.0.0.1:27017/STREAMING_DB`
@@ -422,6 +443,7 @@ pm2 start ecosystem.config.js
 
 ## Changelog
 
+- **2026-07-19** — Đồng bộ runtime Sub không DB, upload/replication v2, deterministic filename, version rollout và canonical acknowledgement.
 - **2026-07-19** — Bổ sung mục 0 theo static code audit. Ghi rõ MongoDB mới là quyết định cần
   migration chứ chưa bị xóa khỏi code; xác nhận không Redis/BullMQ/p-queue runtime; cập nhật
   heartbeat, encode 7/8, replicate và nginx fail-open. Giữ nguyên snapshot cũ để reference.

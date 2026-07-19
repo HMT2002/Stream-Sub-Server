@@ -24,6 +24,8 @@ const checkRoute = require('./routes/checkRoute');
 const testRoute = require('./routes/testRoute');
 const defaultRouter = require('./routes/defaultRoute');
 const streamingRoute = require('./routes/streamingRoute');
+const uploadV2Route = require('./routes/v2/uploadRoute');
+const replicationV2Route = require('./routes/v2/replicationRoute');
 
 // const client_posts = JSON.parse(fs.readFileSync('./json-resources/client_posts.json'));
 
@@ -35,13 +37,25 @@ if (process.env.NODE_ENV === 'development') {
 console.log(process.env.NODE_ENV);
 app.use(express.json());
 
-app.use(cors());
-app.options('*', cors());
+const corsOptions = {
+  origin: true,
+  credentials: false,
+  allowedHeaders: [
+    'Content-Type', 'Authorization',
+    'X-Upload-Contract', 'X-Upload-Id', 'X-Storage-Key', 'X-Chunk-Index', 'X-Chunk-Count',
+    'X-Chunk-Name', 'X-Media-Extension', 'X-Media-Type', 'X-Video-Id', 'X-Info-Id',
+    'X-Replication-Contract', 'X-Job-Id', 'X-File-Name',
+    'X-Request-Id',
+    // Legacy v1 upload/replication headers remain allowed during migration.
+    'index', 'chunkname', 'chunknames', 'ext', 'title', 'infoid', 'statusid',
+    'filename', 'folder', 'type', 'uploadid',
+  ],
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 const whitelist = ['http://localhost:9000', 'http://localhost:9100', 'http://localhost:9200', 'http://localhost:9300'];
 
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PATCH, DELETE, OPTIONS, HEAD, PUT');
   // res.setHeader(
   //   'Access-Control-Allow-Headers',
@@ -50,8 +64,6 @@ app.use((req, res, next) => {
 
   // res.setHeader('Access-Control-Allow-Credentials', 'true');
   // res.setHeader('Access-Control-Allow-Methods', '*');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-
   // res.header('Access-Control-Allow-Origin', '*');
   // res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
@@ -141,6 +153,8 @@ app.use('/api/v1/replicate', replicateRoute);
 app.use('/api/v1/delete', deleteRoute);
 app.use('/api/v1/streaming', streamingRoute);
 app.use('/api/v1/check', checkRoute);
+app.use('/api/v2/uploads', uploadV2Route);
+app.use('/api/v2/replications', replicationV2Route);
 
 app.all('*', (req, res, next) => {
   next(new AppError('Cant find ' + req.originalUrl + ' on the server', 404));

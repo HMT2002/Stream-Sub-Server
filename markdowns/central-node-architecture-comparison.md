@@ -350,7 +350,22 @@ không cần discovery; node tự outbound register → khớp cả node ở ven
 
 ---
 
++## 8.8 [UPDATED 2026-07-19] Implementation checkpoint upload/replication v2
+
+- Đã đạt ownership: Central query/ghi MongoDB; Sub active runtime chỉ xử lý filesystem/FFmpeg/HTTP.
+- FE upload thẳng tới Sub bằng session Central cấp; `storageKey` và header contract không do FE tự đặt.
+- Replication hiện là **source push tuần tự** tới destination với acknowledgement từng file và timeout
+  120s. Vì vậy §4.3 pull qua nginx + Range/resume vẫn là TARGET, chưa được coi là implemented.
+- Central validate acknowledgement trước mutation placement/count. Delete cũng không mutation khi
+  call Sub thất bại; pending state và inventory reconcile vẫn chưa có.
+- Rolling upgrade mới hỗ trợ chiều Central mới → Sub cũ bằng connector fallback. Capability handshake
+  tổng quát trong §4.4 vẫn là backlog.
+- Contract thực thi và rollout order: [upload-replication-contract-v2.md](upload-replication-contract-v2.md).
+
+
 ## Changelog
+
+- **2026-07-19** — Ghi nhận implementation checkpoint v2 và phân biệt rõ phần đã chạy với TARGET pull/Range/async/reconcile.
 - **2026-06-20** — Thêm **§8.7.5b** (chốt phạm vi giai đoạn): tạm gác socket + bỏ live progress; cảnh báo
   bẫy completion-POST đơn độc gây kẹt `encoding` → encode/replicate dùng **heartbeat nền + POST gia tốc tùy
   chọn** (hoặc one-shot POST + reconcile timeout nếu chưa có heartbeat); delete giữ sync 1 request nhưng

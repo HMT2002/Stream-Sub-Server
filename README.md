@@ -1,4 +1,12 @@
 # Stream-Sub-Server
+
+## Data-plane không DB (2026-07-19)
+
+Sub nhận đủ metadata upload/replication v2 từ Central, chỉ xử lý filesystem, FFmpeg và truyền file; entrypoint active không còn kết nối MongoDB. Xem [`markdowns/upload-replication-contract-v2.md`](markdowns/upload-replication-contract-v2.md).
+
+### Changelog
+
+- **2026-07-19** — Thêm receiver v2, filename xác định từ contract và loại DB khỏi runtime Sub; giữ route v1.
 *Hướng dẫn cuối kỳ!!!*
 *Đây là hướng dẫn cài đặt mới nhất của Sub Server, dùng để deploy server lên VPS để phục vụ việc streaming cho ứng dụng mobile và web*
 

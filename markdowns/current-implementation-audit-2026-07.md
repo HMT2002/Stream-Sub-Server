@@ -25,12 +25,12 @@ module và nginx config. **Không chạy server, test, FFmpeg, nginx hoặc depl
 |---|---|---|---|
 | Redis / BullMQ | Không có dependency Redis/BullMQ đang hoạt động. Central `redisAPI.js` rỗng; sub có module Redis lỗi/thừa nhưng không được import và package không cài `redis`. | Không Redis, không BullMQ. | **Đạt về runtime**, còn dead code ở sub. |
 | MongoDB ở central | Central dùng Mongoose và gọi `mongoose.connect()` khi boot. URI đang chọn là local `STREAMING_DB`; Atlas path bị comment. | MongoDB là persistent source of truth duy nhất. | **Có Mongo**, nhưng cấu hình chưa đúng mô tả “Atlas” trong docs cũ. |
-| MongoDB ở sub | Cả `server.js` và `server_pro.js` vẫn gọi `dbVideoSharing.connect()`; `mongoose` vẫn là dependency; route replicate V2 đọc `Video`/`Server` trực tiếp. | Sub-node không có DB và không chạm MongoDB. | **Chưa lược bỏ khỏi code**. Đây là gap lớn nhất giữa design và implementation. |
+| MongoDB ở sub | **UPDATED:** `server.js`/`server_pro.js` không còn connect DB; upload/replication v2 và controller active không import model. `mongoose`, model và config cũ vẫn còn trên đĩa để cleanup sau. | Sub-node không có DB và không chạm MongoDB. | **Đạt ở runtime v2**; cleanup dependency/dead files chưa làm để tránh ảnh hưởng v1. |
 | `p-queue` | Không có trong package/import của sub. FFmpeg được `spawn()` trực tiếp. | Queue local in-process, giới hạn concurrency theo node/GPU. | **Chưa implemented**. |
-| Heartbeat | Sub có recursive loop ~10s + jitter và timeout 5s, nhưng chỉ auto-start khi `NODE_ENV === 'development'`. Payload mới gồm inventory DASH; central lưu vào `Map` in-memory. | Production heartbeat authoritative; central stamp `receivedAt`, persist/reconcile qua MongoDB; có health/jobs/inventory. | **Prototype một phần**, chưa production/persistent/job-aware. |
-| Encode job | Upload ghép file rồi gọi `encodeIntoDashVer4()` không `await`; API trả 201 sớm, nhưng không có `jobId`, queue, persistent state hay callback completion. | `202 Accepted` + `jobId` + state machine + heartbeat/reconcile. | **Async kiểu fire-and-forget**, chưa phải job protocol đáng tin cậy. |
-| Replication | Source node loop tuần tự từng file và chờ từng HTTP response; central V2 chờ request với timeout 15s rồi cập nhật placement/count. Sub V2 còn lookup MongoDB. | Node↔node, ack 202 nhanh, checksum/range/resume/idempotency, state tại central. | **Node↔node đã có**, orchestration/reliability chưa đạt. |
-| Delete | Sub trả success cả khi file/folder không tồn tại, nhưng dùng sync FS và response 201. Central vẫn sửa MongoDB placement kể cả request node thất bại. | Idempotent sync command; chỉ commit state theo kết quả/reconcile; retry an toàn. | **Idempotent bề mặt**, nhưng transaction/order và reconcile chưa an toàn. |
+| Heartbeat | V2 có receive, node table, check một/tất cả; heartbeat quá 20s chuyển `suspect`, kết hợp control/media probe để phân biệt `degraded`/`disconnected`. State vẫn ở `Map`; Sub auto-loop vẫn chỉ bật development. | Production heartbeat authoritative; central stamp `receivedAt`, persist/reconcile qua MongoDB; có health/jobs/inventory. | **Checklist liveness đã có**, persistence và production reporting còn thiếu. |
+| Encode job | Upload v2 trả `202 Accepted`, có `uploadId`, marker idempotency và state `accepted`; FFmpeg vẫn fire-and-forget, chưa có durable completion callback/queue. | `202 Accepted` + `jobId` + state machine + heartbeat/reconcile. | **Contract nhận job đã có**, durable lifecycle chưa đạt. |
+| Replication | Central gửi command đầy đủ; source Sub không DB, gửi tuần tự và validate acknowledgement từng file; Central validate ack tổng trước khi cập nhật DB, timeout 120s. | Node↔node, ack 202 nhanh, checksum/range/resume/idempotency, state tại central. | **Contract và ownership đã đạt**; checksum/resume/durable job còn để sau. |
+| Delete | Central chỉ sửa placement/count sau response Sub thành công; xóa bản cuối vẫn được chặn ngoài development. Chưa có pending/reconcile khi response không chắc chắn. | Idempotent sync command; chỉ commit state theo kết quả/reconcile; retry an toàn. | **Ordering đã sửa**, durable reconcile còn thiếu. |
 | Segment data path | Frontend nhận URL direct/nginx; DASH segment có thể đi thẳng node/nginx. | Central chỉ control plane, không nằm trên media byte path. | **Đạt ở luồng DASH mới**, còn nhiều legacy handler/proxy tại central/sub. |
 | nginx static delivery | Sub có `streamingVer2`/`nginx.conf` port 9150 dùng `sendfile`; frontend ưu tiên `subservernginxurl`. | nginx serve manifest/segment, Node chỉ auth/control nhẹ. | **Có config + URL path**, nhưng config auth hiện chưa hoàn chỉnh và fail-open. |
 | Universal player | `DashVideoPlayer` được tái dùng ở PlayerHub và VideoPageVer6, có dash.js + SubtitlesOctopus; nhiều `VideoPageVer1..6`, HLS/DASH/demo vẫn còn. | Một universal player component/adapters. | **Đang hội tụ**, chưa hoàn tất. |
@@ -39,7 +39,8 @@ module và nginx config. **Không chạy server, test, FFmpeg, nginx hoặc depl
 
 ### 3.1 Boot, database và ownership của state
 
-- `backend/server.js` luôn gọi `dbVideoSharing.connect()` trước khi listen.
+- **SUPERSEDED:** assertion cũ cho rằng entrypoint Sub gọi `dbVideoSharing.connect()`.
+- **UPDATED 2026-07-19:** cả `server.js` và `server_pro.js` của Sub không còn mở DB; Central vẫn là DB owner.
 - `backend/config/database/db_index.js` hiện connect tới Mongo local
   `mongodb://127.0.0.1:27017/STREAMING_DB`; code Atlas chỉ là comment.
 - `backend/package.json` có Mongoose 7 và **không có** Redis/BullMQ.
@@ -69,13 +70,12 @@ server selection trong route này vẫn là “server đầu tiên”, token TTL
 
 ### 3.3 Replicate và delete
 
-- Replicate V2: central POST tới source node `/api/v1/replicate/send-folder-v2`, chờ tối đa
-  15 giây. Source node đọc `videoId/serverId` từ MongoDB riêng của sub, rồi gửi từng file trực
-  tiếp tới destination node. Đây là data path node↔node, nhưng còn phụ thuộc DB ở node.
+- **UPDATED:** Central POST command đầy đủ tới `/api/v2/replications/send-folder`, chờ tối đa 120 giây.
+  Source đọc filesystem theo `storageKey`, gửi từng file tới destination và không truy vấn DB.
 - Sau call, central thêm placement và tăng `numberOfReplicant`; không có `jobId`, checksum,
   resume hoặc reconciliation để chứng minh destination đã đủ bộ file.
-- Delete: central gọi node trước, nhưng sau `catch` vẫn tiếp tục splice placement và giảm replica
-  count trong Mongo. Nếu node unreachable, DB có thể nói “đã xóa” trong khi file vẫn tồn tại.
+- **SUPERSEDED:** delete từng tiếp tục sửa MongoDB sau khi call Sub lỗi.
+- **UPDATED 2026-07-19:** service mới throw trước mutation; placement/count chỉ đổi sau response Sub thành công.
 
 **Hệ quả:** control-plane metadata có thể drift khỏi inventory thật. Heartbeat inventory phải trở
 thành backstop và central chỉ commit transition sau outcome hợp lệ hoặc reconcile.
@@ -94,9 +94,10 @@ backward compatibility, nhưng tài liệu phải gọi đúng là **hybrid lega
 Bằng chứng trực tiếp:
 
 - `package.json` vẫn có `mongoose` 8.x.
-- `server.js` và `server_pro.js` đều import `config/database/db_index` rồi gọi `connect()`.
-- `db_index.js` connect bằng biến môi trường database.
-- `replicateController.sendVideoForReplicationV2()` import và query `Video` + `Server`.
+- **SUPERSEDED:** `server.js` và `server_pro.js` từng import `config/database/db_index` rồi gọi `connect()`.
+- **UPDATED 2026-07-19:** hai entrypoint không còn mở DB; `db_index.js` chỉ còn là file legacy không được runtime import.
+- **SUPERSEDED:** `replicateController.sendVideoForReplicationV2()` từng query `Video` + `Server`.
+- **UPDATED 2026-07-19:** route v2 dùng `replicationV2Controller` và command đầy đủ từ Central.
 - Các model Mongo vẫn tồn tại; riêng `VideoStatus.js` đã bị comment toàn bộ, và update
   `VideoStatus` trong encode cũng bị comment.
 
@@ -174,7 +175,7 @@ restart có thể làm mất toàn bộ knowledge về process đang chạy/dở
 
 ### Chỉ được nói là target/backlog
 
-- “Sub-node không có MongoDB.”
+- “Sub-node đã xóa sạch package/model/config Mongo legacy.” Runtime active không DB, nhưng dead files/dependency còn tồn tại.
 - “MongoDB central là source of truth cho heartbeat/job state.”
 - “Sub dùng p-queue.”
 - “Encode/replicate dùng 202 + jobId + reconciliation.”
@@ -186,16 +187,16 @@ restart có thể làm mất toàn bộ knowledge về process đang chạy/dở
 
 ## 7. Thứ tự migration khuyến nghị
 
-1. **Cắt Mongo khỏi sub thật sự:** central gửi đủ source/destination/video path trong command;
-   xóa DB boot call, Mongoose dependency và route lookup Mongo ở node.
+1. **Hoàn tất cleanup Mongo legacy ở sub:** DB boot call và active lookup đã bỏ; còn dependency,
+   model/config/dead utility cần xóa sau khi xác nhận không ảnh hưởng v1.
 2. **Đóng job contract:** central tạo `jobId`, node ack 202, local queue giới hạn concurrency,
    heartbeat report job snapshot, central validate transition và reconcile timeout/restart.
 3. **Persist heartbeat tại central:** stable node ID, central `receivedAt`, Mongo upsert nhẹ;
    inventory chỉ update khi hash đổi; liveness query theo threshold.
 4. **Làm replicate crash-safe:** temp path, checksum/size, resume/range, atomic finalize và
    inventory xác nhận trước khi tăng replica count.
-5. **Sửa delete ordering:** chỉ đổi placement theo outcome; nếu response không chắc chắn thì
-   mark pending và reconcile, không tự coi là thành công.
+5. **Hoàn thiện delete reconcile:** ordering đã sửa; nếu response không chắc chắn vẫn cần
+   pending state, retry và inventory reconciliation.
 6. **Chốt nginx access policy:** implement `/__auth`, bỏ fail-open khi hardening, tách rõ
    playback token với admin/control auth.
 7. **Tiếp tục player consolidation:** adapter HLS/DASH, giữ libass cho ASS, rồi retire route
@@ -212,6 +213,9 @@ restart có thể làm mất toàn bộ knowledge về process đang chạy/dở
 - [`backend/modules/storeAPI.js`](../../Stream-Central-Server/backend/modules/storeAPI.js)
 - [`backend/controllers/redirectController.js`](../../Stream-Central-Server/backend/controllers/redirectController.js)
 - [`backend/modules/redirectAPI.js`](../../Stream-Central-Server/backend/modules/redirectAPI.js)
+- [`backend/services/redirect/uploadAllocationService.js`](../../Stream-Central-Server/backend/services/redirect/uploadAllocationService.js)
+- [`backend/services/redirect/replicationService.js`](../../Stream-Central-Server/backend/services/redirect/replicationService.js)
+- [`backend/modules/nodeUrl.js`](../../Stream-Central-Server/backend/modules/nodeUrl.js)
 - [`frontend/src/pages/AppRouter.js`](../../Stream-Central-Server/frontend/src/pages/AppRouter.js)
 - [`frontend/src/pages/PlayerHubPageVer1.jsx`](../../Stream-Central-Server/frontend/src/pages/PlayerHubPageVer1.jsx)
 - [`frontend/src/components/videoCmp/DashVideoPlayer.jsx`](../../Stream-Central-Server/frontend/src/components/videoCmp/DashVideoPlayer.jsx)
@@ -226,6 +230,10 @@ restart có thể làm mất toàn bộ knowledge về process đang chạy/dở
 - [`modules/heartbeatAPI.js`](../../Stream-Sub-Server/modules/heartbeatAPI.js)
 - [`controllers/uploadController.js`](../../Stream-Sub-Server/controllers/uploadController.js)
 - [`controllers/replicateController.js`](../../Stream-Sub-Server/controllers/replicateController.js)
+- [`controllers/uploadV2Controller.js`](../../Stream-Sub-Server/controllers/uploadV2Controller.js)
+- [`controllers/replicationV2Controller.js`](../../Stream-Sub-Server/controllers/replicationV2Controller.js)
+- [`services/uploadSessionService.js`](../../Stream-Sub-Server/services/uploadSessionService.js)
+- [`services/replicationService.js`](../../Stream-Sub-Server/services/replicationService.js)
 - [`controllers/deleteController.js`](../../Stream-Sub-Server/controllers/deleteController.js)
 - [`modules/encodeAPI.js`](../../Stream-Sub-Server/modules/encodeAPI.js)
 - [`nginx.conf`](../../Stream-Sub-Server/nginx.conf)
@@ -233,6 +241,8 @@ restart có thể làm mất toàn bộ knowledge về process đang chạy/dở
 
 ## Changelog
 
+- **2026-07-19** — Đồng bộ trạng thái cuối: API v2 theo domain, heartbeat checklist 20s, upload/replication không DB ở Sub, acknowledgement validation và delete ordering.
+- **2026-07-19** — Cập nhật upload/replication v2: runtime Sub không DB, Central gửi metadata đầy đủ và chỉ commit placement sau acknowledgement hợp lệ.
 - **2026-07-19** — Tạo audit sau khi đối chiếu static code của ba repo. Tách AS-IS/TARGET;
   xác nhận runtime không Redis/BullMQ; phát hiện MongoDB ở sub chưa được lược bỏ khỏi entrypoint,
   dependency và replicate V2; ghi trạng thái thật của heartbeat, p-queue, encode, replicate,

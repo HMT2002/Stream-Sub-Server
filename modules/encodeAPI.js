@@ -4,9 +4,6 @@ const path = require('path');
 const axios = require('axios');
 const fluentFfmpeg = require('fluent-ffmpeg');
 const ffmpeg = require('fluent-ffmpeg');
-const Video = require('../models/mongo/Video');
-const VideoStatus = require('../models/mongo/VideoStatus');
-const Server = require('../models/mongo/Server');
 
 //const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const ffmpegPath = '..\\ffmpeg.exe';

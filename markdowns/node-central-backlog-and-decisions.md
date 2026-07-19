@@ -29,6 +29,22 @@
 > mới đạt một phần. Xem ma trận §1.1 và
 > [current-implementation-audit-2026-07.md](current-implementation-audit-2026-07.md).
 
++### 1.0A [UPDATED 2026-07-19] Implementation checkpoint mới hơn baseline bên dưới
+
+> [SUPERSEDED 2026-07-19] Các dòng §1.1 nói Sub vẫn mở Mongo, replication còn lookup DB,
+> heartbeat chưa có checklist, hoặc delete luôn mutation sau lỗi là snapshot trước refactor.
+
+| Hạng mục | Đã có | Còn thiếu |
+|---|---|---|
+| Mongo ở Sub | Entry point và active controller/route/service không connect/import DB; command v2 đủ metadata. | Xóa dependency, model/config và dead utility legacy sau khi khóa v1. |
+| Heartbeat | Central stamp `receivedAt`; v2 có node table, check một/tất cả và ngưỡng suspect 20s kết hợp control/media probe. | Production auto-report, Mongo persistence, jobs/bootId/seq và reconcile. |
+| Upload/encode | Central phát session; Sub deterministic filename, marker idempotency, trả 202 accepted. | p-queue, durable job state, completion callback/heartbeat snapshot. |
+| Replication | Không DB ở Sub, ack từng file và ack tổng; Central chỉ commit placement sau ack; có connector fallback cho Sub cũ. | Chuyển async, checksum, Range/resume, atomic finalize, inventory reconcile. |
+| Delete | Call Sub lỗi thì không sửa placement/count. | Pending state, retry/reconcile khi outcome không chắc chắn. |
+
+Contract triển khai: [upload-replication-contract-v2.md](upload-replication-contract-v2.md).
+
+
 ### 1.1 Baseline implementation sau code audit 2026-07-19
 
 | Hạng mục | Code hiện có | Việc còn thiếu để đạt quyết định |
@@ -190,6 +206,7 @@ Body: { ts, health:{cpuLoad,memFreeMB,diskFreeGB,encodeSlots,encodeActive,netOut
 ---
 
 ## Changelog
+- **2026-07-19** — Thêm checkpoint sau refactor: Sub active runtime không DB, heartbeat checklist 20s, upload session v2, replication acknowledgement/fallback và delete ordering; giữ backlog async/checksum/reconcile.
 - **2026-07-19** — Static-audit code Central `tue-alpha@bae83c5` và Sub
   `alpha@0427d60`; thêm §1.1 để tách quyết định TARGET khỏi implementation AS-IS. Phát hiện
   MongoDB chưa được bỏ khỏi sub entrypoint/replicate V2, heartbeat chỉ auto-start ở development,

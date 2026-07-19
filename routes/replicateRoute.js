@@ -1,5 +1,6 @@
 const express = require('express');
 const replicateController = require('../controllers/replicateController');
+const replicationV2Controller = require('../controllers/replicationV2Controller');
 
 const {
   upload,
@@ -46,7 +47,7 @@ router
   .route('/receive-folder')
   .post(replicateController.checkFolderOnReceiving, uploadFolderFile, replicateController.receiveReplicateDashVideo);
 router.route('/send-folder').post(replicateController.sendVideoForReplication);
-router.route('/send-folder-v2').post(replicateController.sendVideoForReplicationV2);
+router.route('/send-folder-v2').post(replicationV2Controller.sendFolder);
 
 //#endregion
 
