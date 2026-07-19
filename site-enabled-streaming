@@ -81,4 +81,4 @@ server {
         }
     }
         # ===== HẾT KHỐI CÁCH B (cắt từ "upstream node_app {" tới dòng này nếu đổi sang A) =====
-}
+
