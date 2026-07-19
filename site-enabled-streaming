@@ -1,0 +1,84 @@
+upstream node_app {
+        server 127.0.0.1:9100;     # Node.js của sub node — GIỮ NGUYÊN cổng cũ
+        keepalive 32;              # tái dùng TCP tới Node (cần proxy_http_version 1.1 + Connection "")
+}
+
+
+server {
+        listen 9150;               # CỔNG serve file videos TRỰC TIẾP (mới), tách khỏi Node:9100
+        server_name _;
+
+        # ----------------------------------------------------------------
+        # ROOT = folder videos. BẮT BUỘC absolute (nginx resolve root theo
+        # nginx prefix, KHÔNG theo CWD/vị trí file). Dummy tạm — ĐỔI path thật:
+        root /home/ubuntu/apps/Stream-Sub-Server/videos;
+        #
+        # Cấu trúc thư mục dự kiến (Stream-Sub-Server là sibling của repo này):
+        #   <parent>/Stream-Documents          <- repo chứa file config này
+        #   <parent>/Stream-Sub-Server/videos  <- folder cần serve  (đích)
+        # Tương đối nó là "../Stream-Sub-Server/videos" so với Stream-Documents,
+        # NHƯNG đừng viết relative vào root: nginx KHÔNG hiểu theo CWD -> dùng absolute.
+        # Request "GET :9150/<id>/manifest.mpd" -> mở "<root>/<id>/manifest.mpd".
+        # ----------------------------------------------------------------
+
+        sendfile   on;
+        tcp_nopush on;
+        # aio on; directio 4m;     # BẬT khi deploy Linux/AWS (file lớn, không bẩn page cache).
+                                    # BỎ khi test trên Windows (không hỗ trợ như Linux).
+
+        # CORS + MIME đặt ở SERVER-LEVEL để cả "location /" và "location @serve"
+        # cùng kế thừa. (add_header KHÔNG kế thừa xuống location nếu location đó
+        # tự khai add_header riêng -> nên gom ở đây cho cả 2 dùng chung.)
+        add_header Access-Control-Allow-Origin   '*' always;
+        add_header Access-Control-Allow-Methods  'GET, HEAD, OPTIONS' always;
+        # DASH player gắn hai custom header vào manifest và segment. Browser sẽ
+        # preflight OPTIONS, nên cả config deploy này phải cho phép đúng hai tên đó.
+        add_header Access-Control-Allow-Headers  'Content-Type, Authorization, Range, X-Player-Token, X-Player-Session' always;
+        add_header Access-Control-Expose-Headers 'Content-Length, Content-Range' always;
+        add_header Access-Control-Max-Age        86400 always;
+
+        types {
+                application/dash+xml          mpd;
+                application/vnd.apple.mpegurl m3u8;
+                video/mp4  mp4 m4s m4v;
+                audio/mp4  m4a;
+                video/mp2t ts;
+        }
+
+        location / {
+                    if ($request_method = OPTIONS) { return 204; }   # preflight CORS, chạy trước auth
+
+                    # ── AUTH TẠM (FAIL-OPEN) ──────────────────────────────────
+                    # auth_request gọi Node /auth/verify. NHƯNG nếu auth bị từ chối
+                    # (401/403) HOẶC Node lỗi/chết/timeout (500/502/503/504), thì
+                    # error_page CHUYỂN sang @serve => VẪN serve file, KHÔNG huỷ request.
+                    # (auth_request coi 2xx=cho phép, 401/403=cấm, mã khác=lỗi 500.)
+                    #
+                    # >>> SIẾT THẬT về sau (auth chặn như bình thường):
+                    #     XOÁ dòng "error_page ... = @serve;" VÀ xoá cả "location @serve".
+                    #     (giữ lại "auth_request /__auth;")
+                    auth_request /__auth;
+                    error_page 401 403 500 502 503 504 = @serve;
+
+                    try_files $uri =404;
+        }
+
+        # Fallback: serve file kể cả khi auth fail (CHỈ dùng cho giai đoạn TẠM)
+        location @serve {
+                try_files $uri =404;
+        }
+
+        # Endpoint nội bộ: nginx hỏi Node "token này hợp lệ không?"
+        # (chỉ gửi header, không gửi body -> nhẹ)
+        location = /__auth {
+                internal;
+                proxy_pass http://node_app/auth/verify;   # ĐỔI nếu route Node khác
+                proxy_http_version 1.1;
+                proxy_set_header Connection     "";       # bật keepalive tới upstream
+                proxy_pass_request_body off;
+                proxy_set_header Content-Length "";
+                proxy_set_header X-Original-URI $request_uri;
+        }
+    }
+        # ===== HẾT KHỐI CÁCH B (cắt từ "upstream node_app {" tới dòng này nếu đổi sang A) =====
+}
