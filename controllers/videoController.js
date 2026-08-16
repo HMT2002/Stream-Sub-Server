@@ -82,67 +82,75 @@ exports.UploadNewFileFirebase = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.ASSHandler = catchAsync(async (req, res, next) => {
-  console.log('ass is here');
-  console.log(req.url);
-  console.log(__dirname);
+// =============================================================================
+// Phụ đề — ba handler ASS/SRT/VTT vốn là ba bản sao chép y hệt nhau, khác đúng
+// chữ trong câu log. Gộp lại thành một hàm.
+//
+// [FIXED 2026-08-16] Ba thứ đã sửa:
+//
+//   1. MÃ TRẠNG THÁI. File không tồn tại trước đây trả **500**. Theo RFC 9110,
+//      5xx nghĩa là "server hỏng" -> client/player retry vô ích và alert vận
+//      hành kêu sai chỗ. Không có file là **404**.
+//
+//   2. ĐƯỜNG DẪN. `'./' + req.url` giải theo CWD và nối thẳng chuỗi từ người
+//      dùng. `app.js` còn gọi `decodeURIComponent(req.url)` TRƯỚC router, nên
+//      `%2e%2e` đã thành `..` khi tới đây. Thực tế chưa khai thác được từ
+//      internet vì nginx normalize `..` trước `proxy_pass` và cổng 9100 không
+//      mở firewall — nhưng tính an toàn đang do HẠ TẦNG BÊN NGOÀI bảo đảm, chứ
+//      không phải do code. Nay resolve rồi kiểm tra nằm trong repo root.
+//
+//   3. Bỏ 3 dòng `console.log` mỗi request (kể cả in `__dirname` — hằng số).
+//
+// [UPDATED 2026-08-16 Phase 3] 206 -> 200.
+//
+// > [SUPERSEDED] Phase 1 giữ 206 vì "đổi là đổi hành vi với player đang chạy".
+// > [UPDATED] Lập luận đó đã hết hiệu lực: từ Phase 1, Node KHÔNG phục vụ media
+// > nữa (`middleware/dataPlaneGuard.js` trả 410 cho cả `*.vtt`). Không còn
+// > player nào đi qua đây — muốn tới được ba handler này phải bật tường minh
+// > `MEDIA_SERVING=on`.
+//
+// Vì sao 206 là sai: RFC 9110 §15.3.7 quy định 206 Partial Content BẮT BUỘC đi
+// kèm `Content-Range`, và chỉ dùng khi client gửi `Range`. Ở đây không có cái
+// nào — đây là phản hồi TOÀN BỘ file. Một client đúng chuẩn nhận 206 không có
+// `Content-Range` được phép coi response là hỏng.
+// =============================================================================
 
-  if (fs.existsSync('./' + req.url)) {
-    console.log('ass is exist');
-    // console.log(req.headers)
-    const stream = fs.createReadStream('./' + req.url);
-    res.writeHead(206);
-    stream.pipe(res);
-  } else {
-    console.log('ass is not exist');
-    res.status(500).json({
-      status: 500,
-      message: 'Ass is not exist! ' + req.url,
+const repoRoot = path.resolve(__dirname, '..');
+
+// Trả về đường dẫn tuyệt đối, hoặc null nếu nó thoát ra ngoài repo.
+const resolveInsideRepo = (requestUrl) => {
+  const relative = String(requestUrl || '').replace(/^\/+/, '');
+  const resolved = path.resolve(repoRoot, relative);
+  if (resolved !== repoRoot && !resolved.startsWith(repoRoot + path.sep)) return null;
+  return resolved;
+};
+
+const sendSubtitleFile = (req, res, { contentType, label }) => {
+  const filePath = resolveInsideRepo(req.url);
+
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({
+      status: 404,
+      message: `${label} not found`,
       path: req.url,
     });
   }
+
+  res.setHeader('Content-Type', contentType);
+  res.writeHead(200);
+  return fs.createReadStream(filePath).pipe(res);
+};
+
+exports.ASSHandler = catchAsync(async (req, res, next) => {
+  sendSubtitleFile(req, res, { contentType: 'text/x-ssa; charset=utf-8', label: 'ASS subtitle' });
 });
 
 exports.SRTHandler = catchAsync(async (req, res, next) => {
-  console.log('srt is here');
-  console.log(req.url);
-  console.log(__dirname);
-
-  // console.log(req);
-  if (fs.existsSync('./' + req.url)) {
-    console.log('srt is exist');
-    const stream = fs.createReadStream('./' + req.url);
-    res.writeHead(206);
-    stream.pipe(res);
-  } else {
-    console.log('srt is not exist');
-    res.status(500).json({
-      status: 500,
-      message: 'Srt is not exist! ' + req.url,
-      path: req.url,
-    });
-  }
+  sendSubtitleFile(req, res, { contentType: 'application/x-subrip; charset=utf-8', label: 'SRT subtitle' });
 });
 
 exports.VTTHandler = catchAsync(async (req, res, next) => {
-  console.log('vtt is here');
-  console.log(req.url);
-  console.log(__dirname);
-
-  // console.log(req);
-  if (fs.existsSync('./' + req.url)) {
-    console.log('vtt is exist');
-    const stream = fs.createReadStream('./' + req.url);
-    res.writeHead(206);
-    stream.pipe(res);
-  } else {
-    console.log('vtt is not exist');
-    res.status(500).json({
-      status: 500,
-      message: 'Vtt is not exist! ' + req.url,
-      path: req.url,
-    });
-  }
+  sendSubtitleFile(req, res, { contentType: 'text/vtt; charset=utf-8', label: 'VTT subtitle' });
 });
 
 exports.MP4Handler = catchAsync(async (req, res, next) => {

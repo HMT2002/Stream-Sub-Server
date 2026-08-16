@@ -1,24 +1,109 @@
+# =====================================================================
+# SUB NODE — site config  ->  /etc/nginx/sites-enabled/default
+# Đi kèm: nginx_subVer3.conf  ->  /etc/nginx/nginx.conf
+#
+# File này chứa 2 server block, KHÔNG được bỏ block nào:
+#   :80    reverse proxy  -> Node :9100   (control plane: API upload/replicate/delete)
+#   :9150  static file    -> videos/      (data plane: manifest + segment, sendfile)
+#
+# LỊCH SỬ (đọc trước khi sửa):
+# Bản Ver3 đầu tiên (commit 2026-07-25) tách khối :9150 từ nginx_sub.conf ra file
+# riêng — nhưng lúc tách đã LÀM RƠI MẤT server :80 vốn nằm ở file `streaming` cũ.
+# Vì `sudo cp streamingVer3 /etc/nginx/sites-enabled/default` GHI ĐÈ luôn file
+# default (chỗ duy nhất còn giữ server :80), sub node mất sạch cổng 80 sau deploy:
+# nginx -t vẫn PASS, nginx start bình thường, nhưng Central gọi sang thì connection
+# refused — vì Security List/iptables chỉ mở 22/80/443/9150, KHÔNG mở 9100
+# (xem vm-server-setup-guide.md §4.3). Triệu chứng đánh lừa: "nginx chạy mà API chết".
+# =====================================================================
 
 upstream node_app_9100 {
         server 127.0.0.1:9100;     # Node.js của sub node — GIỮ NGUYÊN cổng cũ
         keepalive 32;              # tái dùng TCP tới Node (cần proxy_http_version 1.1 + Connection "")
 }
 
+# =====================================================================
+# SERVER 1 — :80  reverse proxy tới Node (control plane)
+# Đây là cổng DUY NHẤT Central/mobile gọi được từ ngoài internet.
+# 9100 cố tình để internal-only, không mở firewall (vm-server-setup-guide.md §4.3).
+# =====================================================================
 server {
-        listen 9150;               # CỔNG serve file videos TRỰC TIẾP (mới), tách khỏi Node:9100
+        listen 80 default_server;
+        listen [::]:80 default_server;
+        server_name _;
+
+        # KHÔNG khai add_header CORS ở đây. Node đã tự set CORS bằng middleware
+        # `cors` trong app.js (kèm whitelist header X-Upload-*/X-Replication-*).
+        # Thêm ở nginx nữa -> response có 2 lần cùng 1 header -> browser reject
+        # ("The Access-Control-Allow-Origin header contains multiple values").
+        # => API path: Node sở hữu CORS. Static path (:9150): nginx sở hữu CORS.
+
+        location / {
+                proxy_pass http://node_app_9100;
+
+                proxy_http_version 1.1;
+                proxy_set_header Connection      "";     # BẮT BUỘC để dùng keepalive của upstream
+                proxy_set_header Host             $host;
+                proxy_set_header X-Real-IP        $remote_addr;
+                proxy_set_header X-Forwarded-For  $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                # Replication v2: server.js đặt server.timeout = 125000 (chờ ack tối đa 120s).
+                # nginx mặc định proxy_read_timeout 60s -> sẽ cắt giữa chừng và trả 504
+                # TRƯỚC KHI Node kịp trả lời => Central hiểu nhầm là node đích chết.
+                # Nâng lên > 125s cho khớp contract.
+                proxy_read_timeout  180s;
+                proxy_send_timeout  180s;
+
+                # Upload chunk đi thẳng vào Node, không cần nginx buffer lại vào đĩa.
+                proxy_request_buffering off;
+
+                # KHÔNG khai error_page 500 502 503 504 -> để 502 lộ thẳng ra khi Node
+                # chết. Che 502 thành trang tĩnh không tồn tại = nhận 404 mù mờ, debug
+                # sai hướng (deployment-hidden-bugs-and-pitfalls.md mục 3).
+        }
+
+        # WebSocket: hiện KHÔNG dùng (config.env có VER=1.6 nên khối node-media-server
+        # trong server.js không chạy). Nếu sau này bật lại RTMP/HTTP-FLV thì mở khối này
+        # THAY CHO location / ở trên — lưu ý Connection 'upgrade' và keepalive loại trừ nhau.
+        # location /ws/ {
+        #         proxy_pass http://node_app_9100;
+        #         proxy_http_version 1.1;
+        #         proxy_set_header Upgrade    $http_upgrade;
+        #         proxy_set_header Connection "upgrade";
+        #         proxy_set_header Host       $host;
+        # }
+}
+
+# =====================================================================
+# SERVER 2 — :9150  serve file videos TRỰC TIẾP bằng sendfile (data plane)
+# =====================================================================
+server {
+        listen 9150;               # CỔNG serve file videos TRỰC TIẾP, tách khỏi Node:9100
         server_name _;
 
         # ----------------------------------------------------------------
-        # ROOT = folder videos. BẮT BUỘC absolute (nginx resolve root theo
-        # nginx prefix, KHÔNG theo CWD/vị trí file). Dummy tạm — ĐỔI path thật:
-        root D:/gitrepos/Stream-Sub-Server;
+        # ROOT = THƯ MỤC GỐC REPO trên VM, KHÔNG phải thư mục videos.
+        # Lý do: URL contract của frontend là `subservernginxurl` =
+        #   http://<ip>:9150/videos/<videoname>/init.mpd
+        # (current-implementation-audit-2026-07.md §3, dòng 63) — bản thân URL
+        # ĐÃ chứa sẵn đoạn "/videos/". Nếu root trỏ thẳng vào .../videos thì nginx
+        # sẽ mở .../videos/videos/<name>/init.mpd -> 404 toàn bộ.
         #
-        # Cấu trúc thư mục dự kiến (Stream-Sub-Server là sibling của repo này):
-        #   <parent>/Stream-Documents          <- repo chứa file config này
-        #   <parent>/Stream-Sub-Server/videos  <- folder cần serve  (đích)
-        # Tương đối nó là "../Stream-Sub-Server/videos" so với Stream-Documents,
-        # NHƯNG đừng viết relative vào root: nginx KHÔNG hiểu theo CWD -> dùng absolute.
-        # Request "GET :9150/<id>/manifest.mpd" -> mở "<root>/<id>/manifest.mpd".
+        # BẮT BUỘC absolute: nginx resolve root theo nginx prefix (/etc/nginx),
+        # KHÔNG theo CWD. Path Windows kiểu "D:/gitrepos/..." trên Linux bị coi là
+        # RELATIVE -> nginx đi tìm /etc/nginx/D:/gitrepos/... -> 404 mọi request,
+        # trong khi `nginx -t` vẫn báo OK (nginx không kiểm tra root có tồn tại).
+        # Đây chính là lỗi của bản Ver3 đầu tiên.
+        #
+        # ĐỔI dòng dưới nếu clone repo vào chỗ khác:
+        root /home/ubuntu/Stream-Sub-Server;
+        # Request "GET :9150/videos/<id>/init.mpd" -> mở "<root>/videos/<id>/init.mpd".
+        #
+        # LƯU Ý QUYỀN: nginx_subVer3.conf chạy worker dưới user `www-data` (không phải
+        # root như bản nginx_sub.conf cũ). www-data cần quyền +x trên MỌI thư mục cha:
+        #     sudo chmod o+x /home/ubuntu
+        # Thiếu bước này -> 403 Forbidden (không phải 404), log ghi "Permission denied".
+        # Và `videos/` nằm trong .gitignore nên KHÔNG có sau git clone -> phải mkdir.
         # ----------------------------------------------------------------
 
         sendfile   on;
@@ -43,38 +128,81 @@ server {
         # bảng global -> đừng làm trừ khi cố ý giới hạn.)
 
         location / {
-                if ($request_method = OPTIONS) { return 204; }   # preflight CORS, chạy trước auth
+                if ($request_method = OPTIONS) { return 204; }   # preflight CORS, phải chạy TRƯỚC auth
+                                                                 # (preflight không mang được token)
 
-                # ── AUTH TẠM (FAIL-OPEN) ──────────────────────────────────
-                # auth_request gọi Node /auth/verify. NHƯNG nếu auth bị từ chối
-                # (401/403) HOẶC Node lỗi/chết/timeout (500/502/503/504), thì
-                # error_page CHUYỂN sang @serve => VẪN serve file, KHÔNG huỷ request.
-                # (auth_request coi 2xx=cho phép, 401/403=cấm, mã khác=lỗi 500.)
+                # ── AUTH (đã nối vào Node thật từ 2026-08-09) ─────────────────
+                # Công tắc bật/tắt KHÔNG còn nằm ở đây nữa mà ở biến AUTH_MODE
+                # trong config.env của Node (off | log | enforce). Lý do: đổi mức
+                # siết chỉ cần `pm2 restart server --update-env`, không phải sửa
+                # config nginx rồi reload — và quan trọng hơn, mode `log` (đếm
+                # số request LẼ RA bị chặn mà vẫn cho qua) là thứ nginx không
+                # diễn đạt được, chỉ Node làm được.
                 #
-                # >>> SIẾT THẬT về sau (auth chặn như bình thường):
-                #     XOÁ dòng "error_page ... = @serve;" VÀ xoá cả "location @serve".
-                #     (giữ lại "auth_request /__auth;")
+                # Cả 3 phần dưới đây là MỘT CỤM, bật/tắt cùng nhau:
+                #   (1) auth_request        (2) auth_request_set  (3) location = /__auth
                 auth_request /__auth;
-                error_page 401 403 500 502 503 504 = @serve;
+
+                # Lấy sessionID mà Node trả về (header X-Auth-Session) ra biến để
+                # ghi vào access.log -> truy vết được từng phiên xem. Cần khai
+                # log_format tương ứng ở nginx_subVer3.conf mới thấy trong log.
+                auth_request_set $auth_session $upstream_http_x_auth_session;
+                auth_request_set $auth_reason  $upstream_http_x_auth_reason;
+
+                # FAIL-OPEN CHỈ KHI HẠ TẦNG HỎNG, KHÔNG fail-open khi bị từ chối:
+                # 401/403 CỐ TÌNH không có trong danh sách này -> bị chặn thật.
+                # 500/502/503/504 = Node chết/treo -> vẫn serve file, vì lúc đó
+                # nginx là thứ duy nhất còn sống và cắt luôn video của người đang
+                # xem là thiệt hại lớn hơn rủi ro cho qua vài request.
+                # >>> MUỐN FAIL-CLOSED TUYỆT ĐỐI: xoá dòng dưới (và cả location @serve).
+                error_page 500 502 503 504 = @serve;
 
                 try_files $uri =404;
         }
 
-        # Fallback: serve file kể cả khi auth fail (CHỈ dùng cho giai đoạn TẠM)
+        # Fallback khi auth service không trả lời được (xem error_page ở trên).
+        # KHÔNG có auth_request ở đây — nếu thêm vào sẽ thành đệ quy vô hạn.
         location @serve {
                 try_files $uri =404;
         }
 
-        # Endpoint nội bộ: nginx hỏi Node "token này hợp lệ không?"
-        # (chỉ gửi header, không gửi body -> nhẹ)
-        # location = /__auth {
-                # internal;
-                # proxy_pass http://node_app_9100/api/default/check/is-this-alive;   # ĐỔI nếu route Node khác
-                # proxy_http_version 1.1;
-                # proxy_set_header Connection     "";       # bật keepalive tới upstream
-                # proxy_pass_request_body off;
-                # proxy_set_header Content-Length "";
-                # proxy_set_header X-Original-URI $request_uri;
-        # }
+        # Endpoint nội bộ: nginx hỏi Node "token này có quyền lấy file này không?"
+        # `internal` = chỉ subrequest gọi được, client gõ thẳng /__auth sẽ nhận 404.
+        location = /__auth {
+                internal;
+
+                # ĐƯỜNG DẪN NÀY PHẢI KHỚP routes/authRoute.js. Sai path -> Node trả
+                # 404 -> auth_request coi mọi mã khác 2xx/401/403 là lỗi -> 500 ->
+                # rơi vào error_page @serve ở trên -> auth im lặng mất tác dụng.
+                proxy_pass http://node_app_9100/api/auth/verify;
+
+                proxy_http_version 1.1;
+                proxy_set_header Connection     "";       # bật keepalive tới upstream
+                proxy_pass_request_body off;              # subrequest không cần body
+                proxy_set_header Content-Length "";
+
+                # URI GỐC: subrequest mang URI /api/auth/verify, Node KHÔNG tự biết
+                # client đang xin file nào. Thiếu header này thì mọi kiểm tra ràng
+                # buộc tài nguyên (token của phim A không mở được phim B) mất tác dụng.
+                proxy_set_header X-Original-URI  $request_uri;
+                proxy_set_header X-Real-IP       $remote_addr;   # cho AUTH_BIND_IP
+
+                # Auth phải nhanh hơn segment. Node chỉ verify HMAC (~vài chục µs);
+                # nếu chạm timeout này nghĩa là Node đang treo -> để nó rơi sang
+                # nhánh fail-open hạ tầng thay vì bắt người xem chờ.
+                proxy_connect_timeout 1s;
+                proxy_read_timeout    2s;
+
+                # ── TUỲ CHỌN: CACHE KẾT QUẢ AUTH ─────────────────────────────
+                # Mỗi người xem sinh ~1 request/segment (2-6s) nhưng token thì
+                # KHÔNG đổi trong suốt phiên. Cache theo token vài giây cắt gần
+                # hết tải auth khi đông người xem. Cần khai `proxy_cache_path`
+                # ở http level (xem nginx_subVer3.conf) rồi bỏ comment:
+                # proxy_cache            auth_cache;
+                # proxy_cache_key        "$http_x_player_token$arg_token$uri";
+                # proxy_cache_valid 204  10s;     # cho phép -> nhớ 10s
+                # proxy_cache_valid 401 403 3s;   # từ chối -> nhớ ngắn hơn, để
+                #                                 # thu hồi phiên có hiệu lực nhanh
+                # LƯU Ý: cache làm việc thu hồi (blacklist) trễ đúng bằng TTL này.
+        }
 }
-# ===== HẾT KHỐI CÁCH B (cắt từ "upstream node_app {" tới dòng này nếu đổi sang A) =====

@@ -260,6 +260,131 @@ pipe, cần tách thành 2 lần `spawn()` riêng nếu chuyển sang argv-array
 
 ---
 
+## 8. Tách nginx.conf thành 2 file (Ver3) — 5 lỗi ẩn cùng lúc, `nginx -t` vẫn PASS hết
+
+**Bối cảnh:** commit `Stream-Sub-Server` 2026-07-25 chuyển từ **Cách B** (server block gộp trong
+`nginx_sub.conf`) sang **Cách A** (site tách ra `sites-enabled`), sinh ra cặp file mới
+`nginx_subVer3.conf` + `streamingVer3`, và sửa `scripts` để copy 2 file này.
+
+**Triệu chứng:** deploy theo `scripts` như mọi lần, `sudo nginx -t` báo **`test is successful`**,
+`systemctl status nginx` **active (running)** — nhưng: Central gọi API sub node thì **connection
+refused**, và (nếu gọi được) mọi request video qua `:9150` trả **404** hoặc **403**.
+
+**Điểm chung của cả 5 lỗi — vì sao `nginx -t` vô dụng ở đây:** `nginx -t` chỉ kiểm tra **cú pháp
++ ngữ nghĩa tĩnh** của config. Nó **không** kiểm tra: thư mục `root` có tồn tại thật không, worker
+có quyền đọc không, URI trong `auth_request` có location tương ứng không, hay "config này có còn
+đủ server block như bản trước không". Tất cả đều là lỗi **runtime**. Đây là by-design — nginx
+không thể biết ý định của người viết config, chỉ biết config có hợp lệ về mặt ngôn ngữ hay không
+(khác với mục 3, nơi lỗi bị *che* bởi remap status code; ở đây lỗi *chưa bao giờ được kiểm tra*).
+
+### 8.1 `sudo cp <site> /etc/nginx/sites-enabled/default` làm rơi mất server `:80`
+
+`streaming` (file cũ) chứa server `listen 80 default_server` proxy sang Node `:9100`.
+`streamingVer3` chỉ chứa server `:9150` static. Nhưng dòng deploy vẫn là:
+```bash
+sudo cp streamingVer3 /etc/nginx/sites-enabled/default   # GHI ĐÈ file duy nhất còn giữ server :80
+```
+→ sau deploy **không còn ai listen `:80`**. Node vẫn sống ở `:9100`, nhưng Security List/iptables
+cố ý **chỉ mở `22/80/443/9150`, không mở `9100`** (`vm-server-setup-guide.md` §4.3) → từ ngoài
+internet sub node **hoàn toàn không gọi được**, dù `pm2 status` báo `online`.
+
+Hai chi tiết dễ bỏ sót đi kèm:
+- `sites-enabled/default` trên Ubuntu là **symlink** tới `sites-available/default`. `cp` **ghi
+  xuyên qua symlink** → file trong `sites-available` bị thay nội dung luôn, không phải bị thay
+  symlink. Backup trước khi cp nếu còn cần bản gốc.
+- nginx **không cảnh báo** khi không có server nào nghe `:80`. "Không có server block" là trạng
+  thái hợp lệ, không phải lỗi.
+
+**Cách phát hiện:**
+```bash
+sudo ss -tlnp | grep -E ':80|9100|9150'   # phải thấy ĐỦ 3 dòng
+curl -sI http://127.0.0.1/                # connection refused = mất server :80 (khác hẳn 502 = Node chết)
+```
+**Cách sửa:** giữ **cả 2 server block trong cùng 1 file site** (`streamingVer3` đã gộp lại từ
+2026-08-09), hoặc tách 2 file rồi copy cả 2 vào `sites-enabled/`. Đừng để 1 lệnh `cp` quyết định
+số phận của server block khác.
+
+### 8.2 `root` còn path Windows → 404 toàn bộ, không hề báo lỗi
+
+```nginx
+root D:/gitrepos/Stream-Sub-Server;   # path máy dev Windows, sót lại trong file deploy
+```
+Trên Linux `D:/gitrepos/...` **không phải path tuyệt đối** (không bắt đầu bằng `/`) → nginx coi là
+**relative** và resolve theo **prefix** `/etc/nginx` (xem [nginx-config-operations-guide.md §1](nginx-config-operations-guide.md))
+→ đi tìm `/etc/nginx/D:/gitrepos/Stream-Sub-Server/videos/...` → `try_files ... =404`.
+`nginx -t` pass vì cú pháp `root` hợp lệ và nginx **không kiểm tra thư mục có tồn tại**.
+
+**Bẫy kép — `/videos` thừa hoặc thiếu:** URL contract của frontend (`subservernginxurl`) là
+`http://<ip>:9150/videos/<videoname>/init.mpd` — **bản thân URL đã chứa `/videos/`**. Nên `root`
+phải trỏ **thư mục gốc repo**, KHÔNG phải thư mục `videos`:
+
+| `root` | URL `/videos/x/init.mpd` mở file | Kết quả |
+|---|---|---|
+| `/home/ubuntu/Stream-Sub-Server` | `/home/ubuntu/Stream-Sub-Server/videos/x/init.mpd` | ✅ đúng |
+| `/home/ubuntu/Stream-Sub-Server/videos` | `.../videos/videos/x/init.mpd` | ❌ 404 |
+
+(TODO §4 của [oracle-storage-node-deploy-log.md](oracle-storage-node-deploy-log.md) trước đây ghi
+path có đuôi `/videos` — **sai theo contract URL**, đã đính chính 2026-08-09.)
+
+### 8.3 `auth_request` trỏ tới `location` đã bị comment → đệ quy subrequest
+
+```nginx
+location / {
+    auth_request /__auth;                    # còn BẬT
+    error_page 401 403 500 502 503 504 = @serve;
+    try_files $uri =404;
+}
+# location = /__auth { internal; proxy_pass ... }   # đã COMMENT
+```
+`auth_request` **không được validate lúc `nginx -t`** — nginx chỉ resolve URI đó lúc chạy thật.
+Không còn `location = /__auth` → subrequest `/__auth` rơi vào chính `location /` → location đó
+lại chạy `auth_request` → **đệ quy** tới giới hạn subrequest của nginx → `[error] subrequests
+cycle` → 500 → `error_page` bắt 500 → `@serve` → **file vẫn ra bình thường**.
+
+Đây là lý do bug sống sót lâu: **kết quả nhìn vẫn đúng**. Cái mất là mỗi segment `.m4s` tốn hàng
+chục subrequest vô ích + `error.log` phình rất nhanh (mỗi request 1 dòng), còn auth thì **không có
+tác dụng gì**. Thêm nữa route trong khối comment (`/api/default/check/is-this-alive`) **không tồn
+tại** — route thật là `/api/default/check/alive/is-this-alive` — nên có bật cũng chỉ 404 → fail-open.
+
+**Cách sửa:** `auth_request` + `error_page` + `location = /__auth` là **một cụm 3 phần, bật/tắt
+cùng nhau**. Đang giai đoạn fail-open thì tắt cả 3 (rẻ hơn, log sạch hơn) thay vì bật nửa vời.
+
+### 8.4 Đổi `user root` → `user www-data` mà quên quyền thư mục → 403 (không phải 404)
+
+`nginx_sub.conf` (Ver2) chạy worker bằng `user root;` — đọc được mọi file nên che mất vấn đề quyền.
+`nginx_subVer3.conf` đổi sang `user www-data;` (đúng về bảo mật) → worker cần bit **`x` cho other
+trên MỌI thư mục cha** của `root`. `/home/ubuntu` trên Ubuntu 22.04+ mặc định `0750` → www-data
+không traverse được → **403 Forbidden**, `error.log` ghi `Permission denied`.
+
+```bash
+sudo -u www-data stat /home/ubuntu/Stream-Sub-Server/videos   # test đúng thứ nginx thấy
+sudo chmod o+x /home/ubuntu                                   # chỉ cần bit traverse, không cần đọc
+```
+Phân biệt nhanh: **404** = sai path/root (§8.2) · **403** = đúng path, sai quyền (§8.4).
+
+### 8.5 `videos/` nằm trong `.gitignore` → thư mục không tồn tại sau `git clone`
+
+`.gitignore` có `videos/*` → clone xong **không có thư mục `videos`**. Hệ quả kép: nginx `:9150`
+404 mọi request, và Node ném `ENOENT` khi ghi chunk upload đầu tiên. Git **không lưu thư mục rỗng**
+(git chỉ theo dõi file) — đây là hành vi by-design, không phải lỗi `.gitignore`.
+→ thêm `mkdir -p videos` vào script deploy (đã thêm 2026-08-09).
+
+**Nguyên lý rút ra (bổ sung cho mục 6):**
+5. **Refactor config hạ tầng nguy hiểm hơn refactor code** — code có test, config chỉ có `nginx -t`
+   vốn *chỉ* kiểm tra cú pháp. Khi tách/gộp file config, checklist bắt buộc là **so sánh danh sách
+   `listen` trước và sau** (`ss -tlnp`), không phải chỉ nhìn `nginx -t`.
+6. **Path và user là 2 thứ luôn khác nhau giữa dev và VM** — mọi giá trị "dummy tạm" (path Windows,
+   route giả, location comment) phải bị coi là *nợ deploy*, ghi thành TODO có ngày, vì chúng không
+   bao giờ tự lộ ra qua bất kỳ lệnh kiểm tra tự động nào.
+
+**References:**
+- nginx docs — `ngx_http_auth_request_module` — https://nginx.org/en/docs/http/ngx_http_auth_request_module.html
+- nginx docs — `root`/`try_files` (path resolution theo prefix) — https://nginx.org/en/docs/http/ngx_http_core_module.html#root
+- nginx docs — `user` directive (worker process credentials) — https://nginx.org/en/docs/ngx_core_module.html#user
+- Git FAQ — vì sao git không track thư mục rỗng — https://git-scm.com/docs/gitignore
+
+---
+
 ## References
 
 - dotenv — https://github.com/motdotla/dotenv
@@ -279,6 +404,12 @@ pipe, cần tách thành 2 lần `spawn()` riêng nếu chuyển sang argv-array
   OCI trỏ về `vm-server-setup-guide.md` (mục 5), và nguyên lý chung rút ra (mục 6). Không trùng
   chủ đề với các file OTT-protocol hiện có trong project knowledge — tạo file mới theo đúng quy
   tắc §3.1 (search overlap trước khi tạo).
+- **2026-08-09** — Thêm mục 8: 5 lỗi ẩn phát sinh khi tách `nginx.conf` thành cặp
+  `nginx_subVer3.conf` + `streamingVer3` (commit 2026-07-25) mà `nginx -t` vẫn PASS toàn bộ —
+  `cp` đè `sites-enabled/default` làm rơi server `:80` (§8.1), `root` còn path Windows + bẫy
+  `/videos` thừa/thiếu (§8.2), `auth_request` trỏ location đã comment gây đệ quy subrequest
+  (§8.3), `user root`→`www-data` thiếu bit traverse gây 403 (§8.4), `videos/` bị `.gitignore`
+  nên không tồn tại sau clone (§8.5). Kèm 2 nguyên lý bổ sung cho mục 6.
 - **2026-07-05** — Thêm mục 7: FFmpeg DASH template `$RepresentationID$`/`$Number$` bị bash nuốt
   thành biến đặc biệt `$_` (rác ngẫu nhiên từ lệnh trước đó trong shell history), phát hiện khi
   test lệnh libx264 CPU-fallback (từ `ffmpeg-presets-reference.md`) trên VM Linux thật. Liên quan

@@ -17,3 +17,8 @@ ffmpeg.exe
 *.png
 config.env
 videos/*
+
+# Trang thai runtime cua node (Phase 1): job encode + danh sach chan phat.
+# Khong commit: moi node co trang thai rieng.
+var/
+*.job.json

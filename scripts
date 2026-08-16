@@ -1,21 +1,65 @@
+# =====================================================================
+# DEPLOY SUB NODE — Ubuntu 22.04 VM mới. CHẠY LẦN LƯỢT TỪNG DÒNG (không phải bash script).
+# Cập nhật 2026-08-09: vá các bước bị thiếu khiến bản Ver3 (2026-07-25) deploy không lên.
+# Tóm tắt cái đã sai: (1) rơi mất server :80, (2) root path Windows, (3) auth_request
+# trỏ location đã comment, (4) thiếu mkdir videos, (5) thiếu chmod cho www-data.
+# Chi tiết: Stream-Documents/markdowns/deployment-hidden-bugs-and-pitfalls.md mục 8.
+# =====================================================================
+
+# ---------- 1. Hệ thống + runtime ----------
 sudo apt-get update
-sudo apt install git
-sudo apt install nginx
-git clone "https://github.com/HMT2002/Stream-Sub-Server.git"
+sudo apt install -y git nginx
+sudo apt install -y ffmpeg           # BẮT BUỘC: encodeAPI.js gọi ffmpeg qua PATH. ffmpeg.exe trong repo là bản Windows, VÔ DỤNG trên VM.
 curl -s https://deb.nodesource.com/setup_20.x | sudo bash
 sudo apt install nodejs -y
 node -v
+
+# ---------- 2. Source ----------
+git clone "https://github.com/HMT2002/Stream-Sub-Server.git"
 cd Stream-Sub-Server
+
+# ---------- 3. config.env ----------
+# config.env nằm trong .gitignore -> KHÔNG có sau clone. config.env_ chỉ là TEMPLATE
+# (CENTRAL_API=http://localhost:9000, ENCODE_TYPE=7/NVENC) — copy nguyên si sẽ chạy
+# được nhưng node vô dụng: không gọi được Central và encode lỗi trên máy không GPU.
 mv config.env_ config.env
+nano config.env                      # SỬA: CENTRAL_API=<ip public của central>, SERVERINDEX, ENCODE_TYPE=6 nếu VM không GPU
+                                     # AUTH_MODE để off cho tới khi Central phát token thật (off -> log -> enforce)
+grep -q "CENTRAL_API=http://localhost" config.env && echo "CẢNH BÁO: CENTRAL_API vẫn là localhost — Central sẽ không gọi tới được node này"
 test -f config.env || { echo "THIẾU config.env — copy file này lên trước khi tiếp tục"; }
-sudo cp streamingVer3 /etc/nginx/sites-enabled/default
+
+# ---------- 4. Thư mục dữ liệu ----------
+# videos/* nằm trong .gitignore -> thư mục KHÔNG tồn tại sau clone.
+# Thiếu nó: nginx :9150 trả 404 mọi request, Node ném ENOENT lúc ghi chunk upload.
+mkdir -p videos
+
+# ---------- 5. nginx ----------
+sudo cp streamingVer3    /etc/nginx/sites-enabled/default    # 2 server block: :80 proxy Node + :9150 static
 sudo cp nginx_subVer3.conf /etc/nginx/nginx.conf
-sudo nginx -t
-sudo npm install
-sudo npm install pm2 -g
-sudo service nginx restart
-pm2 start server.js
+sudo chmod o+x /home/ubuntu          # worker chạy user www-data, cần bit +x trên thư mục cha của root. Thiếu -> 403 chứ không phải 404.
+grep -n "^        root " /etc/nginx/sites-enabled/default    # XÁC NHẬN root = /home/ubuntu/Stream-Sub-Server (đúng chỗ vừa clone), KHÔNG phải path D:/...
+sudo nginx -t                        # PHẢI thấy "syntax is ok" + "test is successful" mới đi tiếp
+sudo systemctl reload nginx          # reload thay vì restart: config sai thì process cũ vẫn sống
+
+# ---------- 6. Node app + PM2 ----------
+npm install                          # KHÔNG sudo: sudo tạo node_modules thuộc root, sau này pm2 (user ubuntu) sửa/ghi log không được
+sudo npm install pm2 -g              # riêng cài global thì cần sudo
+pm2 start server.js                  # KHÔNG "sudo pm2": sudo tạo daemon PM2 riêng dưới /root/.pm2, pm2 status của user ubuntu sẽ trống
 pm2 save
+pm2 startup                          # in ra 1 lệnh sudo — copy chạy lại đúng lệnh đó để PM2 sống qua reboot
+
+# ---------- 7. Verify (chạy hết, đừng bỏ) ----------
+curl -sI http://127.0.0.1/api/default/check/alive/is-this-alive   # 200 = nginx :80 -> Node OK. 502 = Node chết. Connection refused = mất server :80.
+curl -sI http://127.0.0.1:9150/videos/                            # 403/404 ở đây là bình thường khi videos rỗng; 500 mới là bất thường
+sudo ss -tlnp | grep -E "9100|9150|:80"                           # phải thấy đủ 3 cổng listen
+pm2 status
+sudo tail -n 30 /var/log/nginx/error.log
+
+# ---------- 8. Firewall (chỉ làm 1 lần cho VM mới) ----------
+# Cloud Security List/NSG mở 22/80/443/9150 — KHÔNG mở 9100 (giữ internal-only).
+# Oracle còn preload iptables REJECT-all ở tầng OS, xem vm-server-setup-guide.md §4.3.
+
+# ---------- Xem log real-time khi cần ----------
 pm2 logs server
 sudo tail -f /var/log/nginx/access.log
 

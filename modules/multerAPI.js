@@ -2,11 +2,17 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const helperAPI = require('./helperAPI');
+const paths = require('../storage/paths');
 
 const defaultStoragePath = 'resources-storage/uploads/';
+
+/**
+ * @deprecated 2026-08-16 — chuỗi tương đối, giải theo CWD nên đổi chỗ chạy
+ * `pm2 start` là trỏ sang thư mục khác. Dùng `storage/paths` (tuyệt đối).
+ * Còn dùng ở các storage v1 bên dưới. Xoá khi các storage đó vào `legacy/`.
+ * (`videoChunkStoragePath` đã bị bỏ: nó là bản sao y hệt của hằng này.)
+ */
 const videoStoragePath = 'videos/';
-const videoChunkStoragePath = 'videos/';
-const videoStorageRoot = path.resolve(__dirname, '..', 'videos');
 
 const storage = multer.diskStorage({
   destination: defaultStoragePath,
@@ -33,21 +39,50 @@ const storageChunk = multer.diskStorage({
   },
 });
 
+// --- Storage của contract v2 --------------------------------------------------
+// Tên file KHÔNG bao giờ lấy từ client: nó được dựng lại từ `storage/paths` dựa
+// trên metadata Central đã cấp và middleware đã validate. `path.basename()` ở
+// đây là để lấy phần tên từ đường dẫn tuyệt đối mà `paths` trả về — chính đường
+// dẫn đó vừa đi qua `assertInside`, nên không có cách nào thoát ra khỏi root.
+//
+// Mọi lỗi phải đi qua `cb(error)`: ném thẳng trong callback của multer sẽ thành
+// unhandled exception, không rơi vào `globalErrorHandler`.
 const storageChunkV2 = multer.diskStorage({
   destination: (req, file, cb) => {
-    fs.mkdirSync(videoStorageRoot, { recursive: true });
-    cb(null, videoStorageRoot);
+    try {
+      const directory = paths.stagingRoot();
+      fs.mkdirSync(directory, { recursive: true });
+      cb(null, directory);
+    } catch (error) {
+      cb(error);
+    }
   },
-  filename: (req, file, cb) => cb(null, req.uploadContract.chunkName),
+  filename: (req, file, cb) => {
+    try {
+      cb(null, path.basename(paths.chunkPart(req.uploadContract.uploadId, req.uploadContract.chunkIndex)));
+    } catch (error) {
+      cb(error);
+    }
+  },
 });
 
 const storageReplicatedFile = multer.diskStorage({
   destination: (req, file, cb) => {
-    const videoFolder = path.join(videoStorageRoot, req.replicationContract.storageKey);
-    fs.mkdirSync(videoFolder, { recursive: true });
-    cb(null, videoFolder);
+    try {
+      const directory = paths.mediaDir(req.replicationContract.storageKey);
+      fs.mkdirSync(directory, { recursive: true });
+      cb(null, directory);
+    } catch (error) {
+      cb(error);
+    }
   },
-  filename: (req, file, cb) => cb(null, req.replicationContract.fileName),
+  filename: (req, file, cb) => {
+    try {
+      cb(null, path.basename(paths.mediaFile(req.replicationContract.storageKey, req.replicationContract.fileName)));
+    } catch (error) {
+      cb(error);
+    }
+  },
 });
 
 const storageFolderFile = multer.diskStorage({
@@ -210,6 +245,12 @@ module.exports = {
   uploadMultipartFile,
   uploadMultipartFileChunk,
   uploadFolderFile,
+  /**
+   * @deprecated 2026-08-16 — trùng với `uploadContractChunk` (cùng một object).
+   * Tên có hậu tố phiên bản không nói lên nó làm gì; `uploadContractChunk` nói.
+   * Chỉ còn `routes/uploadRoute.js` (v1) import mà KHÔNG dùng.
+   * Xoá khi: `routes/uploadRoute.js` vào `legacy/`.
+   */
   uploadMultipartFileChunkV2,
   uploadContractChunk: uploadMultipartFileChunkV2,
   uploadReplicatedFile,

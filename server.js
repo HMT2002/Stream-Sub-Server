@@ -3,6 +3,37 @@ var path = require('path');
 
 dotenv.config({ path: './config.env' });
 
+// ---------------------------------------------------------------------------
+// Kiểm tra cấu hình NGAY SAU dotenv, TRƯỚC khi require app.
+//
+// Ba biến trong `platform/config.REQUIRED` mà thiếu thì node vẫn khởi động và
+// vẫn nhận request, nhưng hỏng ở tận trong nghiệp vụ: `JWT_SECRET` thiếu ->
+// verify token ném lỗi ở TỪNG segment; `ENCODE_TYPE` sai -> `encodeCommand()`
+// không khớp case nào và sinh ra chuỗi lệnh ffmpeg RỖNG (encode "thành công"
+// mà không có file nào). Đó là lúc tệ nhất để phát hiện: sau khi đã nhận file
+// của người dùng.
+//
+// [UPDATED 2026-08-16 Phase 2] MẶC ĐỊNH ĐÃ ĐẢO: thiếu biến bắt buộc là THOÁT.
+//
+// Phase 0 chỉ ghi log vì các node đang chạy có thể mang `config.env` cũ, và
+// không được phép chết vì một lần deploy. Sau hai vòng deploy, `config.env_`
+// đã có đủ biến và nhánh "chạy tiếp với cấu hình sai" chỉ còn là cách để lỗi
+// nằm im tới lúc có người dùng thật.
+//
+// `CONFIG_STRICT=off` giữ lại hành vi cũ cho tình huống khẩn cấp.
+// ---------------------------------------------------------------------------
+const config = require('./platform/config');
+const log = require('./platform/log');
+
+const configProblems = config.inspect();
+if (configProblems.length) {
+  log.error('config', 'cấu hình không hợp lệ trong config.env', { problems: configProblems });
+  if (String(process.env.CONFIG_STRICT || 'on').toLowerCase() !== 'off') {
+    log.error('config', 'thoát vì CONFIG_STRICT đang bật (đặt CONFIG_STRICT=off để chạy tiếp)');
+    process.exit(1);
+  }
+}
+
 const app = require('./app');
 var httpAttach = require('http-attach'); // useful module for attaching middlewares
 
@@ -31,15 +62,48 @@ const Log_CPU = (isLogOsCPU) => {
 
 //console.log(process.env);
 //START SERVER
-const port = Number(process.env.PORT) + Number(process.env.SERVERINDEX) * Number(process.env.SERVERREP) || 9100;
+// Công thức cổng (PORT + SERVERINDEX * SERVERREP) chuyển vào `platform/config`;
+// giá trị ra không đổi, kể cả nhánh fallback 9100 khi thiếu env.
+const port = config.get().port;
 const server = app.listen(port, () => {
-  console.log('App listening to ' + port);
+  log.info('server', 'listening', { port, nodeEnv: config.get().nodeEnv, authMode: config.get().auth.mode });
 
   setInterval(function () {
     Log_CPU(false);
   }, 1000);
 });
 server.timeout = 125000; // v2 replication waits up to 120s for destination acknowledgements
+
+// ---------------------------------------------------------------------------
+// Khởi động lại thì phải dọn dẹp sau chính mình.
+//
+// 1. Nạp danh sách chặn phát TỪ ĐĨA. Trước đây cơ chế thu hồi duy nhất là mảng
+//    trong RAM (`globals/blacklist.js`) — `pm2 restart` là người bị chặn xem
+//    tiếp được ngay, mà không ai nhận ra.
+//
+// 2. Đối chiếu job encode. Job còn ở `running` mà tiến trình đã chết thì đánh
+//    `failed` và báo Central; job đã xong nhưng chưa giao được thì gửi lại.
+//    Không có bước này, `.job.json` sẽ nói "đang chạy" vĩnh viễn.
+//
+// Cả hai đều KHÔNG được phép chặn node khởi động: chúng tự nuốt lỗi bên trong,
+// và `.catch` ở đây là lưới cuối.
+// ---------------------------------------------------------------------------
+const playbackBlockService = require('./services/playbackBlockService');
+const encodeJobService = require('./services/encodeJobService');
+const storagePaths = require('./storage/paths');
+
+// [THÊM Phase 2] Chuyển file tạm còn sót từ `videos/` sang `var/incoming/`.
+// PHẢI chạy TRƯỚC `reconcile()`: reconcile quét `.job.json` trong stagingRoot,
+// và job của lần chạy trước vẫn đang nằm ở chỗ cũ.
+const migration = storagePaths.migrateLegacyStaging();
+if (migration.moved || migration.failed) {
+  log.info('storage', 'migrated legacy staging files', migration);
+}
+
+playbackBlockService.load();
+encodeJobService
+  .reconcile()
+  .catch((error) => log.error('startup', 'encode reconcile failed', { message: error.message }));
 
 if (process.env.VER === undefined) {
   new hls(server, {

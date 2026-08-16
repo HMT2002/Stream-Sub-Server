@@ -34,30 +34,36 @@ async function concaterServer(chunkNames, destination, originalname) {
     }
   });
 }
+/**
+ * @deprecated 2026-08-16 — đường v1. Thay bằng `POST /api/v2/uploads/chunks`
+ * (`controllers/uploadV2Controller.js`), nơi identity đến từ header do Central
+ * cấp và tên file do Sub tự suy ra.
+ * Xoá khi: `legacy.route.hit` của `POST /api/v1/upload` = 0 trong 30 ngày.
+ *
+ * [FIXED 2026-08-16] Hai handler dưới đây tham chiếu `url` và `port` — HAI BIẾN
+ * CHƯA TỪNG ĐƯỢC KHAI BÁO trong file này. Nhánh "file đã tồn tại" vì vậy ném
+ * `ReferenceError` thay vì trả 200, và lỗi đó rơi vào `globalErrorHandler` ->
+ * client nhận 500. Lỗi nằm im vì nó chỉ chạy khi upload trùng tên.
+ */
 exports.checkFileOnReceiving = catchAsync(async (req, res, next) => {
-  console.log('uploadController.checkFileOnReceiving -> ');
   const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
       message: 'Folder already existed on this server',
       path: videoPath,
-      url,
-      port,
     });
     return;
   }
   next();
 });
 
+/** @deprecated 2026-08-16 — xem ghi chú ở `checkFileOnReceiving`. */
 exports.checkFolderOnReceiving = catchAsync(async (req, res, next) => {
-  console.log('check folder before receive');
   const videoPath = 'videos/' + req.body.filename;
   if (fs.existsSync(videoPath)) {
     res.status(200).json({
       message: 'File already existed on this server',
       path: videoPath,
-      url,
-      port,
     });
     return;
   }

@@ -74,6 +74,30 @@ dòng mới bên dưới khi trạng thái đổi thay vì sửa lại dòng cũ
 - `ENCODE_TYPE` trong `config.env` **chưa xác nhận đã đổi sang `6`** cho node này (cần set tay nếu
   server không GPU).
 
+**Cập nhật 2026-08-09 — sau khi audit lại bộ config Ver3 (commit `Stream-Sub-Server` 2026-07-25):**
+
+- Bộ config deploy hiện hành đổi thành cặp **`nginx_subVer3.conf` + `streamingVer3`** (Cách A —
+  site tách khỏi file lõi). Cặp cũ `nginx_sub.conf` + `streaming` **giữ lại làm tham chiếu, KHÔNG
+  dùng chung** — `nginx_sub.conf` gộp sẵn server `:9150` bên trong, trộn với `streamingVer3` sẽ
+  listen `:9150` hai lần → `[emerg]`.
+- Bản Ver3 lúc mới tạo có **5 lỗi ẩn khiến deploy không lên dù `nginx -t` PASS** — root cause đầy
+  đủ ở [deployment-hidden-bugs-and-pitfalls.md mục 8](deployment-hidden-bugs-and-pitfalls.md).
+  Đã vá hết trong repo `Stream-Sub-Server` ngày 2026-08-09:
+  1. `streamingVer3` mất server `:80` → đã gộp lại **2 server block trong 1 file** (`:80` proxy
+     Node `:9100`, `:9150` static).
+  2. `root D:/gitrepos/Stream-Sub-Server` (path Windows) → `/home/ubuntu/Stream-Sub-Server`.
+  3. `auth_request /__auth` bật trong khi `location = /__auth` bị comment → tắt cả cụm 3 phần,
+     kèm ghi chú route đúng là `/api/default/check/alive/is-this-alive`.
+  4. `scripts` thiếu `mkdir -p videos`, `chmod o+x /home/ubuntu`, `apt install ffmpeg` → đã thêm.
+  5. `:80` thiếu `proxy_read_timeout` > 125s trong khi `server.js` đặt `server.timeout = 125000`
+     cho replication v2 → nginx cắt ở 60s mặc định và trả 504 trước khi Node trả lời. Đã set 180s.
+- **Đính chính TODO §4 (dòng `root`)**: path đúng là `/home/ubuntu/Stream-Sub-Server` (KHÔNG có
+  đuôi `/videos`) — vì URL contract `subservernginxurl` đã chứa sẵn đoạn `/videos/`
+  (`current-implementation-audit-2026-07.md` §3). Đặt `root` tới thư mục `videos` sẽ thành
+  `.../videos/videos/...` → 404.
+- **Chưa verify trên VM thật**: các sửa đổi trên mới ở mức đọc-đối-chiếu config + code, chưa chạy
+  lại `scripts` end-to-end trên Oracle VM. Xem TODO §4.
+
 ---
 
 ## 4. TODO còn treo (ưu tiên giảm dần)
@@ -81,8 +105,12 @@ dòng mới bên dưới khi trạng thái đổi thay vì sửa lại dòng cũ
 - [ ] **Migrate khỏi shape Free Trial trước khi hết hạn** (30 ngày/$300 kể từ 2026-07-04) — retry
   tạo lại bằng `E2.1.Micro`/`A1.Flex` khi capacity Singapore trống, hoặc chủ động upgrade PAYG nếu
   quyết định giữ `VM.Standard2.1`.
-- [ ] Sửa `root` trong `nginx.conf`/`nginx_sub.conf` từ path Windows dummy sang path thật trên VM
-  (`/home/ubuntu/Stream-Sub-Server/videos`) — bắt buộc trước khi test serve video qua `:9150`.
+- [ ] **(2026-08-09, ưu tiên cao nhất)** Chạy lại `scripts` bản đã vá trên VM và verify bằng
+  checklist §5: `ss -tlnp` thấy đủ `:80/:9100/:9150`, `curl -I http://127.0.0.1/api/default/check/alive/is-this-alive`
+  ra 200, `curl -I :9150/videos/<id>/init.mpd` ra 200 + `Content-Type: application/dash+xml`.
+- [x] ~~Sửa `root` trong `nginx.conf`/`nginx_sub.conf` từ path Windows dummy sang path thật trên VM
+  (`/home/ubuntu/Stream-Sub-Server/videos`)~~ — **xong 2026-08-09 trong `streamingVer3`**, nhưng
+  path đúng là `/home/ubuntu/Stream-Sub-Server` (không có `/videos`), xem đính chính ở §3.
 - [ ] Đổi Public IP từ Ephemeral → Reserved (Instance → Attached VNICs → Primary VNIC).
 - [ ] Dọn `ecosystem.config.js`: xoá app `backend` dư hoặc set `SERVERINDEX` riêng nếu cố ý chạy
   nhiều instance.
@@ -132,12 +160,15 @@ pm2 start ecosystem.config.js      # ⚠️ file hiện có 2 app trùng port (x
 
 ### Combo theo tình huống
 
-**Sau khi sửa nginx config (`nginx.conf`/`streaming`):**
+**Sau khi sửa nginx config — bản Ver3 hiện hành (2026-08-09):**
 ```bash
-sudo cp streaming /etc/nginx/sites-enabled/default
-sudo cp nginx.conf /etc/nginx/nginx.conf
+sudo cp streamingVer3      /etc/nginx/sites-enabled/default   # chứa CẢ :80 proxy lẫn :9150 static
+sudo cp nginx_subVer3.conf /etc/nginx/nginx.conf
 sudo nginx -t && sudo systemctl reload nginx
+sudo ss -tlnp | grep -E ':80|9100|9150'                       # BẮT BUỘC: nginx -t PASS không đảm bảo còn đủ server block
 ```
+> Bản cũ (Ver2, chỉ dùng khi rollback — **không trộn với Ver3**):
+> `sudo cp streaming /etc/nginx/sites-enabled/default` + `sudo cp nginx_sub.conf /etc/nginx/nginx.conf`
 
 **Sau khi sửa code (`encodeAPI.js`...) hoặc `config.env`:**
 ```bash
@@ -166,6 +197,11 @@ sudo systemctl is-enabled nginx
   `journalctl`) + PM2 (`start`/`restart --update-env`/`stop`/`delete`/`status`/`logs`/`save`/
   `startup`), kèm 3 combo lệnh theo tình huống thường gặp (sửa nginx, sửa code/env, verify toàn
   diện).
+- **2026-08-09** — Audit lại bộ config Ver3 (`nginx_subVer3.conf` + `streamingVer3`, commit
+  2026-07-25): bổ sung snapshot §3 liệt kê 5 lỗi đã vá, đính chính path `root` trong TODO §4
+  (bỏ đuôi `/videos` — URL contract đã chứa sẵn), thêm TODO verify-trên-VM, cập nhật combo lệnh
+  §5 sang cặp file Ver3 kèm bước `ss -tlnp` bắt buộc. Root cause chi tiết:
+  [deployment-hidden-bugs-and-pitfalls.md mục 8](deployment-hidden-bugs-and-pitfalls.md).
 - **2026-07-05** — Ghi lệnh mục 5 ra file script riêng
   `scripts/oracle-storage-node-nginx-pm2-ops.sh` (dễ copy-từng-dòng/tinh chỉnh) và copy sạch
   `scripts/stream-sub-server-deploy.sh` từ `Stream-Sub-Server/scripts` (bỏ ASCII art không liên

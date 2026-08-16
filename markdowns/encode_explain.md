@@ -129,9 +129,79 @@ ffmpeg -i videos/IjTyvFk.mp4 \                         # input nguồn (decode C
 
 ---
 
+## THUMBNAIL — hai bản, sinh cùng lúc với encode
+
+> [UPDATED 2026-08-15] `modules/encodeAPI.js` sinh **hai** ảnh trước khi encode DASH.
+
+| File | Kích thước ảnh | Dung lượng đo thật | Dùng ở đâu |
+|---|---|---|---|
+| `thumbnail.png` | frame nguyên kích thước (1280×720 – 1920×1080) | 227 KB – 2.8 MB | player hub (`infoPlaybackService.toImageServer`) |
+| `thumb.webp` | 320×180 | **~3 KB** | bảng quản trị video (ô 54×34) |
+
+```bash
+# Bản nhỏ — chạy ngay sau thumbnail.png, trước khi encode DASH
+ffmpeg -y   -ss 10 \                       # seek TRƯỚC -i => input seeking, nhảy thẳng, không decode từ đầu
+  -i <input>   -frames:v 1 \                  # lấy đúng 1 frame
+  -an \                          # bỏ audio: muxer ảnh không nhận stream audio
+  -vf scale=320:-2 \             # rộng 320, cao tự tính theo tỉ lệ gốc, làm tròn CHẴN
+  -c:v libwebp \                 # khai tường minh để lỗi lộ rõ khi build ffmpeg thiếu libwebp
+  -quality 80 \                  # thang 0-100 của libwebp (KHÁC -qscale của MJPEG)
+  <folder>/thumb.webp
+```
+
+### Vì sao `scale=320:-2` chứ không phải `scale=320:180`
+
+`-2` = tự tính chiều cao theo đúng tỉ lệ gốc rồi làm tròn về số chẵn (yêu cầu của hầu hết
+encoder). Video 16:9 cho ra đúng **320×180**; video tỉ lệ khác không bị bóp méo.
+
+Không dùng `pad` để ép đủ 320×180: frontend đã `object-fit: cover`, nướng viền đen vào file là
+mất dữ liệu vĩnh viễn và không lấy lại được.
+
+### Vì sao KHÔNG gộp hai ảnh vào một lệnh ffmpeg
+
+Một lệnh hai output sẽ chỉ decode một lần — nhanh hơn. Nhưng nếu bản ffmpeg trên node **thiếu
+libwebp** thì cả lệnh hỏng, kéo theo **toàn bộ encode DASH** chết theo. Đổi vài chục ms lấy rủi
+ro mất cả pipeline là không đáng.
+
+### Chuỗi lệnh và luật "được phép thất bại"
+
+```
+thumbnail.png && (thumb.webp || echo skipped) && encode DASH
+```
+
+- `||` chạy được ở **cả `cmd.exe` lẫn `/bin/sh`**, nên không phải rẽ nhánh theo
+  `process.platform`. (`&` thì **không** portable: cmd.exe hiểu là "chạy tiếp", sh hiểu là
+  "chạy nền".)
+- Nhánh `echo` luôn trả exit code 0 → chuỗi đi tiếp tới encode DASH.
+
+Điều này quan trọng vì `encodeIntoDashVer4` chỉ coi là thành công khi `close` trả `code === 0`.
+Nếu để bản nhỏ làm hỏng exit code thì một node thiếu libwebp sẽ báo **mọi** lần encode là thất
+bại, dù segment DASH đã ghi đủ.
+
+Đặt bản nhỏ **ngay sau** `thumbnail.png` (không phải cuối chuỗi) để nó có mặt sớm, thay vì phải
+chờ hết encode DASH vốn có thể mất hàng chục phút.
+
+### Ghi chú: `-qscale:v 2` ở lệnh `thumbnail.png` không có tác dụng
+
+`-qscale` chỉ áp cho MJPEG/JPEG; PNG là nén **không mất dữ liệu** nên tham số này bị bỏ qua.
+Đây là lý do file PNG lớn như vậy. Giữ nguyên lệnh cũ vì đổi nó sẽ đổi kích thước của artifact
+mà player hub đang dùng — muốn sửa thì phải đo lại phía player trước.
+
+### Video encode trước 2026-08-15
+
+Chỉ có `thumbnail.png`. Frontend thử `thumb.webp` trước, `404` thì lùi về `thumbnail.png`, nên
+không cần backfill; muốn có bản nhỏ cho video cũ thì chạy lại đúng lệnh trên cho từng thư mục.
+
+---
+
 ## Changelog
 - **2026-06-20** — Thêm header ngữ cảnh + bảng 3 mốc (COMMAND 1 cũ/4 đang dùng/5 so offline);
   đóng khung code từng lệnh cho dễ đọc; gắn link chéo tới
   [ffmpeg-hevc-dash-streaming-notes.md](ffmpeg-hevc-dash-streaming-notes.md) (phân tích đầy đủ)
   và [init_compare_output.md](init_compare_output.md) (verify/so sánh). Giữ nguyên 100% nội dung
   annotate gốc.
+- **2026-08-15** — Thêm mục *THUMBNAIL — hai bản*: encode giờ sinh thêm `thumb.webp` 320×180
+  (~3 KB, nhỏ hơn bản PNG 70–900 lần) cho bảng quản trị. Ghi rõ lý do `scale=320:-2` thay vì
+  `pad`, lý do không gộp hai ảnh vào một lệnh ffmpeg (thiếu libwebp sẽ giết cả pipeline DASH),
+  luật `||` cho phép bản nhỏ thất bại mà không làm hỏng exit code, và ghi chú `-qscale:v 2` ở
+  lệnh PNG là no-op. Giữ nguyên toàn bộ nội dung cũ.

@@ -64,6 +64,7 @@ repository; không ghi đè bản Central nếu working tree có update mới h�
 - `oracle-storage-node-deploy-log.md`
 - `DOCUMENTATION_INDEX.md`
 - `upload-replication-contract-v2.md`
+- `sub-node-code-standardization-draft.md`
 
 ### Media/encode/nginx trực tiếp liên quan node
 
@@ -80,6 +81,7 @@ repository; không ghi đè bản Central nếu working tree có update mới h�
 - `nginx-config-operations-guide.md`
 - `nginx-streaming-mechanism-and-benchmarks.md`
 - `http-header-non-ascii-encoding.md`
+- `ott-playback-token-auth.md`
 
 Không cần copy các bài career/market/CDN thuần nghiên cứu vào sub repo trừ khi task cụ thể cần.
 
@@ -94,8 +96,19 @@ Không cần copy các bài career/market/CDN thuần nghiên cứu vào sub rep
 ## Upload/replication contract đang áp dụng
 
 - `upload-replication-contract-v2.md` — contract FE → Central → Sub và Sub → Sub; Central sở hữu DB, Sub chỉ xử lý data plane.
+- `sub-node-code-standardization-draft.md` — **DRAFT, chưa implement**. Đề xuất chuẩn hoá code Sub
+  (đặt tên, logging, tách tầng, envelope) và mở rộng contract: `stream-encode-v1` (callback kết
+  quả encode) + `stream-heartbeat-v2`. Không thay thế contract v2 đang chạy.
 
 ## Changelog
+
+- **2026-08-16** — Thêm `sub-node-code-standardization-draft.md` vào nhóm sync bắt buộc của Sub.
+  Đây là tài liệu ĐỀ XUẤT: khi nào implement thì phần contract mới phải được merge ngược vào
+  `upload-replication-contract-v2.md` (hoặc tách file contract riêng), còn phần quy ước code ở lại
+  repo Sub.
+
+- **2026-08-09** — Thêm `ott-playback-token-auth.md` vào nhóm sync của Sub (nginx `auth_request`
+  ↔ Node `/api/auth/verify`, bảng kiểm tra và mã trả về).
 
 - **2026-07-19** — Thêm contract upload/replication v2 và ranh giới runtime Sub không DB.
 
